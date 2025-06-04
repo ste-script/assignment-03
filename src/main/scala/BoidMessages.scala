@@ -1,3 +1,6 @@
+import akka.actor.typed.ActorRef
+
+final case class BoidState(position: (Double, Double), velocity: (Double, Double))
 
 object BoidMessages:
   // Messages for the Boid actor
@@ -8,6 +11,3 @@ object BoidMessages:
 
   // Message to update the velocity of a boid
   final case class UpdateVelocity(newVelocity: (Double, Double)) extends BoidMessage
-
-  // Message to request the current state of a boid
-  final case class GetState() extends BoidMessage

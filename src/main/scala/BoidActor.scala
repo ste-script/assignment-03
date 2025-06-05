@@ -23,3 +23,8 @@ object BoidActor:
         velocity = newVelocity
         Behaviors.same
 
+      case GetState(replyTo) =>
+        context.log.info(s"Getting state of boid $boidId")
+        replyTo ! BoidState(position, velocity)
+        Behaviors.same
+

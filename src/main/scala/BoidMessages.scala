@@ -11,3 +11,5 @@ object BoidMessages:
 
   // Message to update the velocity of a boid
   final case class UpdateVelocity(newVelocity: (Double, Double)) extends BoidMessage
+
+  final case class GetState(replyTo: ActorRef[BoidState]) extends BoidMessage

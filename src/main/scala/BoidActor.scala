@@ -1,30 +1,35 @@
-import BoidMessages._
-import akka.actor.typed.Behavior
+import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.Behaviors
 
 object BoidActor:
+  sealed trait Command
+  // Define the messages that the Boid actor can handle
+  final case class UpdatePosition(replyTo: ActorRef[BoidState]) extends Command
+  final case class UpdateVelocity(replyTo: ActorRef[BoidState]) extends Command
+  final case class GetState(replyTo: ActorRef[BoidState]) extends Command
+  final case class BoidState(position: (Double, Double), velocity: (Double, Double))
 
   // Define the state of a boid
 
   // The behavior of the Boid actor
-  def apply(): Behavior[BoidMessage] = Behaviors.setup: context =>
-    var position = (0.0, 0.0)
-    var velocity = (0.0, 0.0)
+  def apply(): Behavior[Command] = Behaviors.setup: context =>
     val boidId = context.self.path.name
+    val state = BoidState((0.0, 0.0), (0.0, 0.0))
+
 
     Behaviors.receiveMessage:
-      case UpdatePosition(newPosition) =>
-        context.log.info(s"Updating position of boid $boidId to $newPosition")
-        position = newPosition
+      case UpdatePosition(replyTo) =>
+        context.log.info(s"Updating position of boid $boidId")
+        replyTo ! state
         Behaviors.same
 
-      case UpdateVelocity(newVelocity) =>
-        context.log.info(s"Updating velocity of boid $boidId to $newVelocity")
-        velocity = newVelocity
+      case UpdateVelocity(replyTo) =>
+        context.log.info(s"Updating velocity of boid $boidId")
+        replyTo ! state
         Behaviors.same
 
       case GetState(replyTo) =>
         context.log.info(s"Getting state of boid $boidId")
-        replyTo ! BoidState(position, velocity)
+        replyTo ! state
         Behaviors.same
-

@@ -1,35 +1,58 @@
 import akka.actor.typed.{ActorRef, Behavior}
-import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.Behaviors
+import pcd.ass01.Model.V2d
 
-object BoidActor:
+case class Position(x: Double, y: Double)
+
+case class Velocity(value: Double)
+
+object BoidActor {
   sealed trait Command
-  // Define the messages that the Boid actor can handle
-  final case class UpdatePosition(replyTo: ActorRef[BoidState]) extends Command
-  final case class UpdateVelocity(replyTo: ActorRef[BoidState]) extends Command
-  final case class GetState(replyTo: ActorRef[BoidState]) extends Command
-  final case class BoidState(position: (Double, Double), velocity: (Double, Double))
 
-  // Define the state of a boid
+  case object VelocityTick extends Command
 
-  // The behavior of the Boid actor
-  def apply(): Behavior[Command] = Behaviors.setup: context =>
-    val boidId = context.self.path.name
-    val state = BoidState((0.0, 0.0), (0.0, 0.0))
+  case object PositionTick extends Command
+
+  private case class PositionUpdate(boidRef: ActorRef[Command], position: Position) extends Command
+
+  private case class VelocityUpdate(boidRef: ActorRef[Command], velocity: Velocity) extends Command
 
 
-    Behaviors.receiveMessage:
-      case UpdatePosition(replyTo) =>
-        context.log.info(s"Updating position of boid $boidId")
-        replyTo ! state
+  def apply(view: pcd.ass01.View.ScalaBoidsView): Behavior[Command] = Behaviors.setup { ctx =>
+    var position = Position(0.0, 0.0) // Initial position
+    var velocity = Velocity(0.0) // Initial velocity
+    var knownPositions = Map.empty[ActorRef[Command], Position]
+    var knownVelocities = Map.empty[ActorRef[Command], Velocity]
+
+    def findNeighbors(): Seq[ActorRef[Command]] = {
+      //todo
+      knownPositions.keys.toSeq
+    }
+
+    Behaviors.receiveMessage {
+      case VelocityTick =>
+        // Broadcast own position to all known boids
+        knownVelocities.keys.foreach(_ ! VelocityUpdate(ctx.self, velocity))
+        val neighbors = findNeighbors()
+        velocity = Velocity(1.0) // Example velocity update logic
+        // Compute steering (placeholder)
+        // Update velocity and position
         Behaviors.same
-
-      case UpdateVelocity(replyTo) =>
-        context.log.info(s"Updating velocity of boid $boidId")
-        replyTo ! state
+      case PositionTick =>
+        // Broadcast own velocity to all known boids
+        knownPositions.keys.foreach(_ ! PositionUpdate(ctx.self, position))
+        val neighbors = findNeighbors()
+        position = Position(position.x + velocity.value, position.y + velocity.value) // Example position update logic
+        // Compute steering (placeholder)
+        // Update position based on velocity
+        view.updateMapPosition(ctx.self.path.name, V2d(position.x, position.y))
         Behaviors.same
-
-      case GetState(replyTo) =>
-        context.log.info(s"Getting state of boid $boidId")
-        replyTo ! state
+      case PositionUpdate(ref, pos) =>
+        knownPositions += (ref -> pos)
         Behaviors.same
+      case VelocityUpdate(ref, vel) =>
+        knownVelocities += (ref -> vel)
+        Behaviors.same
+    }
+  }
+}

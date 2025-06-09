@@ -7,6 +7,7 @@ import pcd.ass01.Model.Boid;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.HashMap;
 import java.util.Map;
 
 public class ScalaBoidsPanel extends JPanel {
@@ -33,7 +34,8 @@ public class ScalaBoidsPanel extends JPanel {
         var h = view.getHeight();
         var envWidth = 800;
         var xScale = w / envWidth;
-        var boids = boidMap.values();
+        var copyBoidMap = new HashMap<>(boidMap);
+        var boids = copyBoidMap.values();
 
         for (V2d boid : boids) {
             var x = boid.x();

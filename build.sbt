@@ -9,9 +9,7 @@ lazy val root = project
   .settings(
     name := "assignment-03",
     version := "0.1.0-SNAPSHOT",
-
     scalaVersion := scala3Version,
-
     libraryDependencies ++= Seq(
       "org.scalameta" %% "munit" % "1.1.1" % Test,
       akkaGroup %% "akka-actor-typed" % AkkaVersion,
@@ -20,14 +18,10 @@ lazy val root = project
       "org.scalatest" %% "scalatest" % "3.2.19" % Test,
       "org.scala-lang.modules" %% "scala-swing" % "3.0.0",
       "ch.qos.logback" % "logback-classic" % "1.5.18"
-    ),
+    )
   )
-
-
 
 // Run in a separate JVM, to make sure sbt waits until all threads have
 // finished before returning.
 // If you want to keep the application running while executing other
 // sbt tasks, consider https://github.com/spray/sbt-revolver/
-
-

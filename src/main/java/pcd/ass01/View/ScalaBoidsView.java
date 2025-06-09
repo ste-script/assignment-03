@@ -8,6 +8,7 @@ import javax.swing.*;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import java.awt.*;
+import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.Map;
 
@@ -18,13 +19,13 @@ public class ScalaBoidsView implements ChangeListener {
     private JSlider cohesionSlider, separationSlider, alignmentSlider, boidSlider;
     private JButton pauseResumeButton, simulationModeButton;
     private int width, height;
-    private final Map<String, V2d> boidMap;
+    private volatile Map<String, V2d> boidMap;
 
 
     public ScalaBoidsView(int width, int height) {
         this.width = width;
         this.height = height;
-        boidMap = new java.util.HashMap<>();
+        boidMap = new HashMap<>();
         frame = new JFrame("Boids Simulation");
         frame.setSize(width, height);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -40,7 +41,7 @@ public class ScalaBoidsView implements ChangeListener {
         frame.setVisible(true);
     }
 
-    public void updateMapPosition(String boidId, V2d position) {
+    public synchronized void updateMapPosition(String boidId, V2d position) {
         boidMap.put(boidId, position);
     }
 
@@ -169,7 +170,7 @@ public class ScalaBoidsView implements ChangeListener {
         return slider;
     }
 
-    public void update(int frameRate) {
+    public synchronized  void update(int frameRate) {
         boidsPanel.setFrameRate(frameRate);
         boidsPanel.repaint();
     }

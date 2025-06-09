@@ -124,7 +124,6 @@ object BoidActor {
           )
         )
         allBoids.foreach(_ ! PositionUpdate(ctx.self, position))
-        ctx.log.info("Boid {} at position: {}", ctx.self.path.name, position)
         view.updateMapPosition(ctx.self.path.name, V2d(position.x, position.y))
         Behaviors.same
       case PositionUpdate(ref, pos) =>

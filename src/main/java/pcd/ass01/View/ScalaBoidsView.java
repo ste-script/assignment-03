@@ -2,6 +2,7 @@ package pcd.ass01.View;
 
 import pcd.ass01.Controller.SimulationStateHandler;
 import pcd.ass01.Model.BoidsProperty;
+import pcd.ass01.Model.P2d;
 import pcd.ass01.Model.V2d;
 
 import javax.swing.*;
@@ -19,7 +20,7 @@ public class ScalaBoidsView implements ChangeListener {
     private JSlider cohesionSlider, separationSlider, alignmentSlider, boidSlider;
     private JButton pauseResumeButton, simulationModeButton;
     private int width, height;
-    private volatile Map<String, V2d> boidMap;
+    private volatile Map<String, P2d> boidMap;
 
 
     public ScalaBoidsView(int width, int height) {
@@ -41,8 +42,12 @@ public class ScalaBoidsView implements ChangeListener {
         frame.setVisible(true);
     }
 
-    public synchronized void updateMapPosition(String boidId, V2d position) {
+    public synchronized void updateMapPosition(String boidId, P2d position) {
         boidMap.put(boidId, position);
+    }
+
+    public void updateAllMapPositions(Map<String, P2d> newMap) {
+        boidMap.putAll(newMap);
     }
 
     private JPanel createSlidersPanel() {
@@ -170,7 +175,7 @@ public class ScalaBoidsView implements ChangeListener {
         return slider;
     }
 
-    public synchronized  void update(int frameRate) {
+    public synchronized void update(int frameRate) {
         boidsPanel.setFrameRate(frameRate);
         boidsPanel.repaint();
     }

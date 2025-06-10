@@ -10,16 +10,18 @@ object BoidActor {
   case object VelocityTick extends Command
 
   case object PositionTick extends Command
+  
+  case object ViewTick extends Command
 
-  final case class UpdatedBoidList(allBoids: Set[ActorRef[Command]]) extends Command
+  private final case class UpdatedBoidList(allBoids: Set[ActorRef[Command]]) extends Command
 
-  private case class PositionUpdate(boidRef: ActorRef[Command], position: P2d) extends Command
+  final case class PositionUpdate(boidRef: ActorRef[Command], position: P2d) extends Command
 
   private case class VelocityUpdate(boidRef: ActorRef[Command], velocity: V2d) extends Command
 
-  val BoidServiceKey: ServiceKey[Command] = ServiceKey[Command]("Boid")
+  private val BoidServiceKey: ServiceKey[Command] = ServiceKey[Command]("Boid")
 
-  def apply(view: pcd.ass01.View.ScalaBoidsView): Behavior[Command] = Behaviors.setup { ctx =>
+  def apply(viewActor: ActorRef[Command]): Behavior[Command] = Behaviors.setup { ctx =>
     var allBoids = Set.empty[ActorRef[Command]]
     var knownPositions = Map.empty[ActorRef[Command], P2d]
     var knownVelocities = Map.empty[ActorRef[Command], V2d]
@@ -124,7 +126,7 @@ object BoidActor {
           )
         )
         allBoids.foreach(_ ! PositionUpdate(ctx.self, position))
-        view.updateMapPosition(ctx.self.path.name, V2d(position.x, position.y))
+        viewActor ! PositionUpdate(ctx.self, position)
         Behaviors.same
       case PositionUpdate(ref, pos) =>
         knownPositions += (ref -> pos)
@@ -135,6 +137,8 @@ object BoidActor {
       case UpdatedBoidList(boids) =>
         allBoids = boids - ctx.self // don't send to self
         Behaviors.same
+      case _ =>
+        Behaviors.unhandled
     }
   }
 }

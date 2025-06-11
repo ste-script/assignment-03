@@ -16,10 +16,10 @@ object BoidActor {
     val CohesionWeight = 1.0
     val AlignmentWeight = 1.0
 
-    val MinX = -Width / 2
-    val MaxX = Width / 2
-    val MinY = -Height / 2
-    val MaxY = Height / 2
+    val MinX: Int = -Width / 2
+    val MaxX: Int = Width / 2
+    val MinY: Int = -Height / 2
+    val MaxY: Int = Height / 2
   }
 
   // Message protocol
@@ -43,13 +43,14 @@ object BoidActor {
 
   def apply(
              viewActor: ActorRef[Command],
-             spacePartitioner: ActorRef[SpacePartitionerActor.Command]
-           ): Behavior[Command] = Behaviors.setup { ctx =>
+             spacePartitioner: ActorRef[SpacePartitionerActor.Command],
+             boidSimulation: ActorRef[BoidsSimulation.Command]
+           ):
+  Behavior[Command] = Behaviors.setup { ctx =>
     import Config._
     val random = new Random()
 
     // State variables
-    var allBoids = Set.empty[ActorRef[Command]]
     var position = P2d(
       MinX + random.nextDouble() * Width,
       MinY + random.nextDouble() * Height
@@ -118,12 +119,6 @@ object BoidActor {
     // Register with receptionist
     ctx.system.receptionist ! Receptionist.Register(BoidServiceKey, ctx.self)
 
-    val adapter = ctx.messageAdapter[Receptionist.Listing] {
-      case listing if listing.isForKey(BoidServiceKey) =>
-        UpdatedBoidList(listing.serviceInstances(BoidServiceKey))
-    }
-    ctx.system.receptionist ! Receptionist.Subscribe(BoidServiceKey, adapter)
-
     // Initialize the space partitioner with our position and velocity
     spacePartitioner ! SpacePartitionerActor.UpdateBoidVelocity(ctx.self, velocity)
     spacePartitioner ! SpacePartitionerActor.UpdateBoidPosition(ctx.self, position)
@@ -139,18 +134,13 @@ object BoidActor {
         val newVelocity = calculateFlocking(neighbors)
         velocity = newVelocity
         spacePartitioner ! SpacePartitionerActor.UpdateBoidVelocity(ctx.self, velocity)
-        allBoids.foreach(_ ! VelocityUpdate(ctx.self, velocity))
         Behaviors.same
 
       case PositionTick =>
         position = wrapPosition(position.sum(velocity))
         spacePartitioner ! SpacePartitionerActor.UpdateBoidPosition(ctx.self, position)
-        allBoids.foreach(_ ! PositionUpdate(ctx.self, position))
         viewActor ! PositionUpdate(ctx.self, position)
-        Behaviors.same
-
-      case UpdatedBoidList(boids) =>
-        allBoids = boids - ctx.self
+        boidSimulation ! BoidsSimulation.BoidUpdated(ctx.self)
         Behaviors.same
 
       case _ => Behaviors.unhandled

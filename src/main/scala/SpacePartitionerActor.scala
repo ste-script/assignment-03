@@ -5,8 +5,11 @@ import pcd.ass01.Model.{P2d, V2d}
 object SpacePartitionerActor {
   // Message protocol
   sealed trait Command
+
   final case class UpdateBoidPosition(boidRef: ActorRef[BoidActor.Command], position: P2d) extends Command
+
   final case class UpdateBoidVelocity(boidRef: ActorRef[BoidActor.Command], velocity: V2d) extends Command
+
   final case class FindNeighbors(
                                   boidRef: ActorRef[BoidActor.Command],
                                   position: P2d,
@@ -28,10 +31,18 @@ object SpacePartitionerActor {
         Behaviors.same
 
       case FindNeighbors(boidRef, position, perceptionRadius) =>
-        val neighbors = knownBoids.filter { case (ref, (pos, _)) =>
-          ref != boidRef && position.distance(pos) < perceptionRadius
-        }.map { case (_, (pos, vel)) =>
-          (pos, vel)
+        extension (p1: P2d)
+          private def distanceSquared(p2: P2d): Double = {
+            val dx = p1.x - p2.x
+            val dy = p1.y - p2.y
+            dx * dx + dy * dy
+          }
+
+        val radiusSquared = perceptionRadius * perceptionRadius
+        val neighbors = knownBoids.collect {
+          case (ref, (pos, vel)) if ref != boidRef &&
+            position.distanceSquared(pos) < radiusSquared =>
+            (pos, vel)
         }.toSeq
 
         boidRef ! BoidActor.NeighborsResult(neighbors)

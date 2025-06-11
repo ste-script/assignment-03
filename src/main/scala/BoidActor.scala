@@ -5,12 +5,30 @@ import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import scala.util.Random
 
 object BoidActor {
+  // Configuration parameters
+  private object Config {
+    val Width = 1000
+    val Height = 1000
+    val PerceptionRadius = 50.0
+    val AvoidRadius = 20.0
+    val MaxSpeed = 4.0
+    val SeparationWeight = 1.0
+    val CohesionWeight = 1.0
+    val AlignmentWeight = 1.0
+
+    val MinX = -Width / 2
+    val MaxX = Width / 2
+    val MinY = -Height / 2
+    val MaxY = Height / 2
+  }
+
+  // Message protocol
   sealed trait Command
 
   case object VelocityTick extends Command
 
   case object PositionTick extends Command
-  
+
   case object ViewTick extends Command
 
   private final case class UpdatedBoidList(allBoids: Set[ActorRef[Command]]) extends Command
@@ -19,126 +37,123 @@ object BoidActor {
 
   private case class VelocityUpdate(boidRef: ActorRef[Command], velocity: V2d) extends Command
 
+  final case class NeighborsResult(neighbors: Seq[(P2d, V2d)]) extends Command
+
   private val BoidServiceKey: ServiceKey[Command] = ServiceKey[Command]("Boid")
 
-  def apply(viewActor: ActorRef[Command]): Behavior[Command] = Behaviors.setup { ctx =>
+  def apply(
+             viewActor: ActorRef[Command],
+             spacePartitioner: ActorRef[SpacePartitionerActor.Command]
+           ): Behavior[Command] = Behaviors.setup { ctx =>
+    import Config._
+    val random = new Random()
+
+    // State variables
     var allBoids = Set.empty[ActorRef[Command]]
-    var knownPositions = Map.empty[ActorRef[Command], P2d]
-    var knownVelocities = Map.empty[ActorRef[Command], V2d]
+    var position = P2d(
+      MinX + random.nextDouble() * Width,
+      MinY + random.nextDouble() * Height
+    )
 
-    val perceptionRadius = 50.0 // Example perception radius
-    val avoidRadius = 20.0 // Example avoidance radius
-    val width = 1000
-    val height = 1000
-    val maxSpeed = 4.0 // Example maximum speed
-    val separationWeight = 1.0 // Weight for separation behavior
-    val cohesionWeight = 1.0 // Weight for cohesion behavior
-    val alignmentWeight = 1.0 // Weight for alignment behavior
-    var position =
-      P2d(-width / 2 + Random().nextDouble() * width, -height / 2 + Random().nextDouble() * height) // Initial position
     var velocity = V2d(
-      Random().nextDouble() * maxSpeed / 2 - maxSpeed / 4,
-      Random().nextDouble() * maxSpeed / 2 - maxSpeed / 4
-    ); // Initial velocity
+      random.nextDouble() * MaxSpeed - MaxSpeed / 2,
+      random.nextDouble() * MaxSpeed - MaxSpeed / 2
+    )
 
-    def minX = -width / 2
+    def calculateFlocking(neighbors: Seq[(P2d, V2d)]): V2d = {
+      var separationX, separationY = 0.0
+      var separationCount = 0
+      var alignmentX, alignmentY = 0.0
+      var cohesionX, cohesionY = 0.0
+      neighbors.foreach { case (pos, vel) =>
+        val distance = position.distance(pos)
 
-    def maxX = width / 2
-
-    def minY = -height / 2
-
-    def maxY = height / 2
-
-    def findNeighbors(): Set[ActorRef[Command]] =
-      knownPositions.keys.filter { boidRef =>
-        position.distance(knownPositions(boidRef)) < perceptionRadius
-      }.toSet
-
-    def calculateSeparation(nearbyBoids: Set[ActorRef[Command]]): V2d =
-      val (dx, dy, count) = nearbyBoids.foldLeft((0.0, 0.0, 0)) { case ((dxAcc, dyAcc, cnt), other) =>
-        val otherPos = knownPositions(other)
-        val distance = position.distance(otherPos)
-        if (distance < avoidRadius) {
-          (dxAcc + position.x - otherPos.x, dyAcc + position.y - otherPos.y, cnt + 1)
-        } else {
-          (dxAcc, dyAcc, cnt)
+        // Separation - only consider close neighbors
+        if (distance < AvoidRadius && distance > 0) {
+          separationX += (position.x - pos.x) / (distance * distance)
+          separationY += (position.y - pos.y) / (distance * distance)
+          separationCount += 1
         }
+
+        // Alignment - consider velocity
+        alignmentX += vel.x
+        alignmentY += vel.y
+
+        // Cohesion - consider position
+        cohesionX += pos.x
+        cohesionY += pos.y
       }
-      if (count > 0) V2d(dx / count, dy / count).getNormalized else V2d(0, 0)
 
-    def calculateCohesion(nearbyBoids: Set[ActorRef[Command]]): V2d =
-      if (nearbyBoids.nonEmpty) {
-        val (centerX, centerY) = nearbyBoids.foldLeft((0.0, 0.0)) { case ((xAcc, yAcc), other) =>
-          val otherPos = knownPositions(other)
-          (xAcc + otherPos.x, yAcc + otherPos.y)
-        }
-        val avgX = centerX / nearbyBoids.size
-        val avgY = centerY / nearbyBoids.size
-        V2d(avgX - position.x, avgY - position.y).getNormalized
+      // Calculate final vectors
+      val separation = if (separationCount > 0) {
+        V2d(separationX, separationY).getNormalized
       } else V2d(0, 0)
 
-    def calculateAlignment(nearbyBoids: Set[ActorRef[Command]]): V2d =
-      if (nearbyBoids.nonEmpty) {
-        val (totalVx, totalVy) = nearbyBoids.foldLeft((0.0, 0.0)) { case ((vxAcc, vyAcc), other) =>
-          val otherVel = knownVelocities(other)
-          (vxAcc + otherVel.x, vyAcc + otherVel.y)
-        }
-        val avgVx = totalVx / nearbyBoids.size
-        val avgVy = totalVy / nearbyBoids.size
-        V2d(avgVx - velocity.x, avgVy - velocity.y).getNormalized
-      } else V2d(0, 0)
+      val alignment = V2d(
+        alignmentX / neighbors.size - velocity.x,
+        alignmentY / neighbors.size - velocity.y
+      ).getNormalized
 
-    ctx.system.receptionist ! Receptionist.Register(BoidServiceKey, ctx.self)
-    val adapter = ctx.messageAdapter[Receptionist.Listing] {
-      case listing if listing.isForKey(BoidServiceKey) =>
-        allBoids.foreach(_ ! VelocityUpdate(ctx.self, velocity))
-        allBoids.foreach(_ ! PositionUpdate(ctx.self, position))
-        UpdatedBoidList(listing.serviceInstances(BoidServiceKey))
+      val center = P2d(cohesionX / neighbors.size, cohesionY / neighbors.size)
+      val cohesion = V2d(center.x - position.x, center.y - position.y).getNormalized
+
+      // Combine forces
+      val newVelocity = velocity
+        .sum(separation.mul(SeparationWeight))
+        .sum(alignment.mul(AlignmentWeight))
+        .sum(cohesion.mul(CohesionWeight))
+
+      // Limit speed
+      val speed = newVelocity.abs()
+      if (speed > MaxSpeed) newVelocity.getNormalized.mul(MaxSpeed) else newVelocity
     }
 
+    // Helper for boundary wrapping
+    def wrapPosition(pos: P2d): P2d = {
+      val x = if (pos.x < MinX) pos.x + Width else if (pos.x > MaxX) pos.x - Width else pos.x
+      val y = if (pos.y < MinY) pos.y + Height else if (pos.y > MaxY) pos.y - Height else pos.y
+      P2d(x, y)
+    }
+
+    // Register with receptionist
+    ctx.system.receptionist ! Receptionist.Register(BoidServiceKey, ctx.self)
+
+    val adapter = ctx.messageAdapter[Receptionist.Listing] {
+      case listing if listing.isForKey(BoidServiceKey) =>
+        UpdatedBoidList(listing.serviceInstances(BoidServiceKey))
+    }
     ctx.system.receptionist ! Receptionist.Subscribe(BoidServiceKey, adapter)
+
+    // Initialize the space partitioner with our position and velocity
+    spacePartitioner ! SpacePartitionerActor.UpdateBoidVelocity(ctx.self, velocity)
+    spacePartitioner ! SpacePartitionerActor.UpdateBoidPosition(ctx.self, position)
+
     Behaviors.receiveMessage {
       case VelocityTick =>
-        // Broadcast own position to all known boids
-        val neighbors = findNeighbors()
-        val separation = calculateSeparation(neighbors)
-        val alignment = calculateAlignment(neighbors)
-        val cohesion = calculateCohesion(neighbors)
-        velocity = velocity
-          .sum(alignment.mul(alignmentWeight))
-          .sum(separation.mul(separationWeight))
-          .sum(cohesion.mul(cohesionWeight))
-        val speed = velocity.abs()
-        if (speed > maxSpeed) {
-          velocity = velocity.getNormalized.mul(maxSpeed) // Limit speed
-        }
+        spacePartitioner ! SpacePartitionerActor.FindNeighbors(
+          ctx.self, position, PerceptionRadius
+        )
+        Behaviors.same
+
+      case NeighborsResult(neighbors) =>
+        val newVelocity = calculateFlocking(neighbors)
+        velocity = newVelocity
+        spacePartitioner ! SpacePartitionerActor.UpdateBoidVelocity(ctx.self, velocity)
         allBoids.foreach(_ ! VelocityUpdate(ctx.self, velocity))
         Behaviors.same
-      case PositionTick =>
-        // Broadcast own velocity to all known boids
-        position = position.sum(velocity) // Update position with velocity
 
-        // Handle boundary wrapping
-        position = position.sum(
-          V2d(
-            if (position.x < minX) width else if (position.x >= maxX) -width else 0,
-            if (position.y < minY) height else if (position.y >= maxY) -height else 0
-          )
-        )
+      case PositionTick =>
+        position = wrapPosition(position.sum(velocity))
+        spacePartitioner ! SpacePartitionerActor.UpdateBoidPosition(ctx.self, position)
         allBoids.foreach(_ ! PositionUpdate(ctx.self, position))
         viewActor ! PositionUpdate(ctx.self, position)
         Behaviors.same
-      case PositionUpdate(ref, pos) =>
-        knownPositions += (ref -> pos)
-        Behaviors.same
-      case VelocityUpdate(ref, vel) =>
-        knownVelocities += (ref -> vel)
-        Behaviors.same
+
       case UpdatedBoidList(boids) =>
-        allBoids = boids - ctx.self // don't send to self
+        allBoids = boids - ctx.self
         Behaviors.same
-      case _ =>
-        Behaviors.unhandled
+
+      case _ => Behaviors.unhandled
     }
   }
 }

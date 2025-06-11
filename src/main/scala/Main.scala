@@ -1,35 +1,60 @@
-import akka.actor.typed.{ActorSystem, Behavior, DispatcherSelector}
+import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
+import scala.concurrent.duration._
 
-def rootBehavior: Behavior[Unit] =
-  Behaviors.setup { context =>
-    val view = pcd.ass01.View.ScalaBoidsView(800, 800)
-    // Props for the custom dispatcher
-    val viewActorRef = context.spawnAnonymous(ViewActor(view))
-    val boidsList = for (i <- 1 to 400) yield context.spawnAnonymous(BoidActor(viewActorRef))
-    implicit val ec: scala.concurrent.ExecutionContext = scala.concurrent.ExecutionContext.global
-    //wait for the boids to be created
-    //sleep for a short duration to ensure all actors are initialized
-    context.system.scheduler.scheduleAtFixedRate(
-      initialDelay = scala.concurrent.duration.Duration(0, "seconds"),
-      interval = scala.concurrent.duration.FiniteDuration(40, "millis") // Adjust the interval as needed
-    )(
-      () => {
-        boidsList.foreach(_ ! BoidActor.VelocityTick)
-        boidsList.foreach(_ ! BoidActor.PositionTick)
-        viewActorRef ! BoidActor.ViewTick
-        view.update(25)
+object BoidsSimulation {
+  // Message protocol
+  sealed trait Command
+
+  private case object Tick extends Command
+
+  // Configuration parameters
+  private val SimWidth = 800
+  private val SimHeight = 800
+  private val NumBoids = 500
+  private val TickInterval = 40.millis
+  private val FrameRate = 25
+
+  def apply(): Behavior[Command] = Behaviors.withTimers { timers =>
+    Behaviors.setup { context =>
+      // Create the view
+      val view = new pcd.ass01.View.ScalaBoidsView(SimWidth, SimHeight)
+
+      // Create actors
+      val viewActorRef = context.spawn(ViewActor(view), "viewActor")
+      val spacePartitionerRef = context.spawn(SpacePartitionerActor(), "spacePartitioner")
+
+      val boids = (1 to NumBoids).map { i =>
+        context.spawn(BoidActor(viewActorRef, spacePartitionerRef), s"boid-$i")
       }
-    )
-    Behaviors.empty
+
+      // Start periodic timer
+      timers.startTimerWithFixedDelay(Tick, Tick, TickInterval)
+
+      // Return behavior for handling ticks
+      Behaviors.receiveMessage {
+        case Tick =>
+          // Update velocities then positions
+          boids.foreach(_ ! BoidActor.VelocityTick)
+          boids.foreach(_ ! BoidActor.PositionTick)
+
+          // Update view
+          viewActorRef ! BoidActor.ViewTick
+          view.update(FrameRate)
+
+          Behaviors.same
+      }
+    }
   }
+}
+
 
 @main
-def main(): Unit =
-  val system = ActorSystem(rootBehavior, "BoidSystem")
-  //exit on ctrl-c
+def main(): Unit = {
+  val system = ActorSystem(BoidsSimulation(), "BoidSystem")
+
+  // Exit on Ctrl-C
   sys.addShutdownHook {
     system.terminate()
   }
-
-
+}

@@ -31,20 +31,12 @@ object SpacePartitionerActor {
         Behaviors.same
 
       case FindNeighbors(boidRef, position, perceptionRadius) =>
-        extension (p1: P2d)
-          private def distanceSquared(p2: P2d): Double = {
-            val dx = p1.x - p2.x
-            val dy = p1.y - p2.y
-            dx * dx + dy * dy
+        var neighbors = Seq.empty[(P2d, V2d)]
+        knownBoids.foreach { case (ref, (pos, vel)) =>
+          if (pos.distance(position) <= perceptionRadius && ref != boidRef) {
+            neighbors :+= (pos, vel)
           }
-
-        val radiusSquared = perceptionRadius * perceptionRadius
-        val neighbors = knownBoids.collect {
-          case (ref, (pos, vel)) if ref != boidRef &&
-            position.distanceSquared(pos) < radiusSquared =>
-            (pos, vel)
-        }.toSeq
-
+        }
         boidRef ! BoidActor.NeighborsResult(neighbors)
         Behaviors.same
     }

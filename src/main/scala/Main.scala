@@ -13,7 +13,7 @@ object BoidsSimulation {
   // Configuration parameters
   private val SimWidth = 800
   private val SimHeight = 800
-  private val NumBoids = 10000
+  private val NumBoids = 4000
   private val TickInterval = 40.millis
 
   def apply(): Behavior[Command] = Behaviors.withTimers {
@@ -47,8 +47,8 @@ object BoidsSimulation {
               while (System.currentTimeMillis() - lastFrameTime < TickInterval.toMillis) {
                 // Wait for the tick interval to pass
               }
-              counter = 0
               sendMessages(viewActorRef, boids)
+              counter = 0
               val elapsedTimeToFps = System.currentTimeMillis() - lastFrameTime
               val fps = (1000.0 / elapsedTimeToFps).toInt
               view.update(fps)

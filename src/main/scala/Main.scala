@@ -8,55 +8,57 @@ object BoidsSimulation {
   // Message protocol
   sealed trait Command
 
-  case class BoidUpdated(boidRef: ActorRef[BoidActor.Command]) extends Command
+  case class BoidVelocityUpdated(boidRef: ActorRef[BoidActor.Command]) extends Command
+
+  case class BoidPositionUpdated(boidRef: ActorRef[BoidActor.Command]) extends Command
 
   // Configuration parameters
   private val SimWidth = 800
   private val SimHeight = 800
-  private val NumBoids = 4000
+  private val NumBoids = 1000
   private val TickInterval = 40.millis
 
-  def apply(): Behavior[Command] = Behaviors.withTimers {
-    def sendMessages(viewActorRef: ActorRef[BoidActor.Command], boids: IndexedSeq[ActorRef[BoidActor.Command]]): Unit = {
-      boids.foreach(_ ! BoidActor.VelocityTick)
-      boids.foreach(_ ! BoidActor.PositionTick)
-      viewActorRef ! BoidActor.ViewTick
+  def apply(): Behavior[Command] = Behaviors.setup { context =>
+    // Create the view
+    val view = new ScalaBoidsView(SimWidth, SimHeight)
+
+    // Create actors
+    val viewActorRef = context.spawn(ViewActor(view), "viewActor")
+    val spacePartitionerRef = context.spawn(SpacePartitionerActor(), "spacePartitioner")
+
+    val boids = (1 to NumBoids).map { i =>
+      context.spawn(BoidActor(viewActorRef, spacePartitionerRef, context.self), s"boid-$i")
     }
 
-    timers =>
-      Behaviors.setup { context =>
-        // Create the view
-        val view = new ScalaBoidsView(SimWidth, SimHeight)
+    boids.foreach(_ ! BoidActor.VelocityTick)
+    var counterPosition = 0
+    var counterVelocity = 0
+    var lastFrameTime = 0L
 
-        // Create actors
-        val viewActorRef = context.spawn(ViewActor(view), "viewActor")
-        val spacePartitionerRef = context.spawn(SpacePartitionerActor(), "spacePartitioner")
-
-        val boids = (1 to NumBoids).map { i =>
-          context.spawn(BoidActor(viewActorRef, spacePartitionerRef, context.self), s"boid-$i")
+    Behaviors.receiveMessage {
+      case BoidVelocityUpdated(boidRef) =>
+        counterVelocity += 1
+        if (counterVelocity == boids.size) {
+          boids.foreach(_ ! BoidActor.PositionTick)
+          counterVelocity = 0
         }
-
-        sendMessages(viewActorRef, boids)
-        var counter = 0
-        var lastFrameTime = 0L
-
-        Behaviors.receiveMessage {
-          case BoidUpdated(boidRef) =>
-            counter += 1
-            if (counter == boids.size) {
-              while (System.currentTimeMillis() - lastFrameTime < TickInterval.toMillis) {
-                // Wait for the tick interval to pass
-              }
-              sendMessages(viewActorRef, boids)
-              counter = 0
-              val elapsedTimeToFps = System.currentTimeMillis() - lastFrameTime
-              val fps = (1000.0 / elapsedTimeToFps).toInt
-              view.update(fps)
-              lastFrameTime = System.currentTimeMillis()
-            }
-            Behaviors.same
+        Behaviors.same
+      case BoidPositionUpdated(boidRef) =>
+        counterPosition += 1
+        if (counterPosition == boids.size) {
+          while (System.currentTimeMillis() - lastFrameTime < TickInterval.toMillis) {
+            // Wait for the tick interval to pass
+          }
+          boids.foreach(_ ! BoidActor.VelocityTick)
+          viewActorRef ! BoidActor.ViewTick
+          counterPosition = 0
+          val elapsedTimeToFps = System.currentTimeMillis() - lastFrameTime
+          val fps = (1000.0 / elapsedTimeToFps).toInt
+          view.update(fps)
+          lastFrameTime = System.currentTimeMillis()
         }
-      }
+        Behaviors.same
+    }
   }
 }
 

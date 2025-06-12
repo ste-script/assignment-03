@@ -134,13 +134,14 @@ object BoidActor {
         val newVelocity = calculateFlocking(neighbors)
         velocity = newVelocity
         spacePartitioner ! SpacePartitionerActor.UpdateBoidVelocity(ctx.self, velocity)
+        boidSimulation ! BoidsSimulation.BoidVelocityUpdated(ctx.self)
         Behaviors.same
 
       case PositionTick =>
         position = wrapPosition(position.sum(velocity))
         spacePartitioner ! SpacePartitionerActor.UpdateBoidPosition(ctx.self, position)
         viewActor ! PositionUpdate(ctx.self, position)
-        boidSimulation ! BoidsSimulation.BoidUpdated(ctx.self)
+        boidSimulation ! BoidsSimulation.BoidPositionUpdated(ctx.self)
         Behaviors.same
 
       case _ => Behaviors.unhandled

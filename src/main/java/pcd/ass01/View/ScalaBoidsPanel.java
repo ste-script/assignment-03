@@ -6,17 +6,21 @@ import pcd.ass01.View.BoidPattern.ShapeDrawer;
 import javax.swing.*;
 import java.awt.*;
 import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 
 public class ScalaBoidsPanel extends JPanel {
 
     private final ScalaBoidsView view;
     private int framerate;
-    private final Map<String, P2d> boidMap;
+    private List<P2d> boids;
 
-    public ScalaBoidsPanel(ScalaBoidsView view, Map<String, P2d> boidMap) {
+    public ScalaBoidsPanel(ScalaBoidsView view, List<P2d> boids) {
         this.view = view;
-        this.boidMap = boidMap;
+        this.boids = boids;
+    }
+
+    public void setBoids(List<P2d> boids) {
+        this.boids = boids;
     }
 
     public void setFrameRate(int framerate) {
@@ -32,9 +36,6 @@ public class ScalaBoidsPanel extends JPanel {
         var h = view.getHeight();
         var envWidth = 800;
         var xScale = w / envWidth;
-        var copyBoidMap = new HashMap<>(boidMap);
-        var boids = copyBoidMap.values();
-
         for (P2d boid : boids) {
             var x = boid.x();
             var y = boid.y();

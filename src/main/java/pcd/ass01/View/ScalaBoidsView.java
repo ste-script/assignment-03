@@ -1,17 +1,14 @@
 package pcd.ass01.View;
 
-import pcd.ass01.Controller.SimulationStateHandler;
-import pcd.ass01.Model.BoidsProperty;
 import pcd.ass01.Model.P2d;
-import pcd.ass01.Model.V2d;
 
 import javax.swing.*;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import java.awt.*;
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.Hashtable;
-import java.util.Map;
+import java.util.List;
 
 public class ScalaBoidsView implements ChangeListener {
 
@@ -20,20 +17,20 @@ public class ScalaBoidsView implements ChangeListener {
     private JSlider cohesionSlider, separationSlider, alignmentSlider, boidSlider;
     private JButton pauseResumeButton, simulationModeButton;
     private int width, height;
-    private volatile Map<String, P2d> boidMap;
+    private volatile List<P2d> boids;
 
 
     public ScalaBoidsView(int width, int height) {
         this.width = width;
         this.height = height;
-        boidMap = new HashMap<>();
+        boids = new ArrayList<P2d>();
         frame = new JFrame("Boids Simulation");
         frame.setSize(width, height);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         JPanel cp = new JPanel(new BorderLayout());
 
-        boidsPanel = new ScalaBoidsPanel(this, boidMap);
+        boidsPanel = new ScalaBoidsPanel(this, boids);
         cp.add(BorderLayout.CENTER, boidsPanel);
 
         cp.add(BorderLayout.SOUTH, createBottomPanel());
@@ -42,12 +39,9 @@ public class ScalaBoidsView implements ChangeListener {
         frame.setVisible(true);
     }
 
-    public synchronized void updateMapPosition(String boidId, P2d position) {
-        boidMap.put(boidId, position);
-    }
-
-    public void updateAllMapPositions(Map<String, P2d> newMap) {
-        boidMap.putAll(newMap);
+    public synchronized void updateAllMapPositions(List<P2d> newMap) {
+        boids = new ArrayList<>(newMap);
+        boidsPanel.setBoids(boids);
     }
 
     private JPanel createSlidersPanel() {

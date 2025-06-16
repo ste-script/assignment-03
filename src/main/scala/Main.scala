@@ -1,4 +1,4 @@
-import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
+import akka.actor.typed.{ActorRef, ActorSystem, Behavior, DispatcherSelector}
 import akka.actor.typed.scaladsl.Behaviors
 import pcd.ass01.View.ScalaBoidsView
 
@@ -15,7 +15,7 @@ object BoidsSimulation {
   // Configuration parameters
   private val SimWidth = 800
   private val SimHeight = 800
-  private val NumBoids = 1000
+  private val NumBoids = 3000
   private val TickInterval = 40.millis
 
   def apply(): Behavior[Command] = Behaviors.setup { context =>
@@ -25,9 +25,13 @@ object BoidsSimulation {
     // Create actors
     val viewActorRef = context.spawn(ViewActor(view), "viewActor")
     val spacePartitionerRef = context.spawn(SpacePartitionerActor(), "spacePartitioner")
-
+    val akkaDispatcher = context.system.settings.config.getConfig("akka.actor.default-dispatcher")
     val boids = (1 to NumBoids).map { i =>
-      context.spawn(BoidActor(viewActorRef, spacePartitionerRef, context.self), s"boid-$i")
+      context.spawn(
+        BoidActor(viewActorRef, spacePartitionerRef, context.self),
+        s"boid-$i",
+        DispatcherSelector.fromConfig("boids-dispatcher")
+      )
     }
 
     boids.foreach(_ ! BoidActor.VelocityTick)
@@ -39,6 +43,7 @@ object BoidsSimulation {
       case BoidVelocityUpdated(boidRef) =>
         counterVelocity += 1
         if (counterVelocity == boids.size) {
+          spacePartitionerRef ! SpacePartitionerActor.Clean
           boids.foreach(_ ! BoidActor.PositionTick)
           counterVelocity = 0
         }
@@ -49,8 +54,8 @@ object BoidsSimulation {
           while (System.currentTimeMillis() - lastFrameTime < TickInterval.toMillis) {
             // Wait for the tick interval to pass
           }
-          boids.foreach(_ ! BoidActor.VelocityTick)
           viewActorRef ! BoidActor.ViewTick
+          boids.foreach(_ ! BoidActor.VelocityTick)
           counterPosition = 0
           val elapsedTimeToFps = System.currentTimeMillis() - lastFrameTime
           val fps = (1000.0 / elapsedTimeToFps).toInt

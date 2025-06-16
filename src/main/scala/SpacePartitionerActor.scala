@@ -6,6 +6,8 @@ object SpacePartitionerActor {
   // Message protocol
   sealed trait Command
 
+  case object Clean extends Command
+
   final case class UpdateBoidPosition(boidRef: ActorRef[BoidActor.Command], position: P2d) extends Command
 
   final case class UpdateBoidVelocity(boidRef: ActorRef[BoidActor.Command], velocity: V2d) extends Command
@@ -17,28 +19,31 @@ object SpacePartitionerActor {
                                 ) extends Command
 
   def apply(): Behavior[Command] = Behaviors.setup { ctx =>
-    var knownBoids = Map.empty[ActorRef[BoidActor.Command], (P2d, V2d)]
+    var positions = Seq.empty[(ActorRef[BoidActor.Command], P2d)]
+    var velocities = Map.empty[ActorRef[BoidActor.Command], V2d]
 
     Behaviors.receiveMessage {
       case UpdateBoidPosition(boidRef, position) =>
-        knownBoids = knownBoids.updated(boidRef,
-          (position, knownBoids.getOrElse(boidRef, (P2d(0, 0), V2d(0, 0)))._2))
+        positions = (boidRef, position) +: positions
         Behaviors.same
 
       case UpdateBoidVelocity(boidRef, velocity) =>
-        knownBoids = knownBoids.updated(boidRef,
-          (knownBoids.getOrElse(boidRef, (P2d(0, 0), V2d(0, 0)))._1, velocity))
+        velocities = velocities.updated(boidRef, velocity)
         Behaviors.same
 
       case FindNeighbors(boidRef, position, perceptionRadius) =>
-        var neighbors = Seq.empty[(P2d, V2d)]
-        knownBoids.foreach { case (ref, (pos, vel)) =>
-          if (pos.distance(position) <= perceptionRadius && ref != boidRef) {
-            neighbors :+= (pos, vel)
-          }
+        if (positions.size != velocities.size) {
+          ctx.log.warn(s"${positions.size} positions and ${velocities.size} velocities do not match!")
         }
+        val neighbors = for n <- positions if n._1 != boidRef && n._2.distance(position) <= perceptionRadius
+          yield (n._2, velocities.getOrElse(n._1, V2d(0, 0)))
         boidRef ! BoidActor.NeighborsResult(neighbors)
         Behaviors.same
+
+      case Clean =>
+        positions = positions.empty
+        Behaviors.same
+
     }
   }
 }

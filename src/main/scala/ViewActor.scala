@@ -8,7 +8,7 @@ object ViewActor {
     var knownPositions = Seq.empty[P2d]
     Behaviors.receiveMessage {
       case BoidActor.PositionUpdate(ref, pos) =>
-        knownPositions = knownPositions :+ pos
+        knownPositions = pos +: knownPositions
         Behaviors.same
       case BoidActor.ViewTick =>
         view.updateAllMapPositions(knownPositions.asJava)

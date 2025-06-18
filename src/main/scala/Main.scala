@@ -1,5 +1,5 @@
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior, DispatcherSelector}
-import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.scaladsl.{Behaviors, Routers}
 import pcd.ass01.View.ScalaBoidsView
 
 import scala.concurrent.duration.*
@@ -15,7 +15,7 @@ object BoidsSimulation {
   // Configuration parameters
   private val SimWidth = 800
   private val SimHeight = 800
-  private val NumBoids = 3000
+  private val NumBoids = 2000
   private val TickInterval = 40.millis
 
   def apply(): Behavior[Command] = Behaviors.setup { context =>
@@ -24,11 +24,24 @@ object BoidsSimulation {
 
     // Create actors
     val viewActorRef = context.spawn(ViewActor(view), "viewActor")
-    val spacePartitionerRef = context.spawn(SpacePartitionerActor(), "spacePartitioner")
+    val availableCores = Runtime.getRuntime.availableProcessors() + 1
+    val spacePartitionerPool = Routers.pool(availableCores) {
+      SpacePartitionerActor()
+    }
+
+    def conditionPredicate[T]: T => Boolean = {
+      case _: SpacePartitionerActor.FindNeighbors => false
+      case _ => true
+    }
+
+    val spacePartitionerBroadcast = context.spawn(
+      spacePartitionerPool.withBroadcastPredicate(conditionPredicate),
+      "spacePartitionerBroadcast"
+    )
     val akkaDispatcher = context.system.settings.config.getConfig("akka.actor.default-dispatcher")
     val boids = (1 to NumBoids).map { i =>
       context.spawn(
-        BoidActor(viewActorRef, spacePartitionerRef, context.self),
+        BoidActor(viewActorRef, spacePartitionerBroadcast, context.self),
         s"boid-$i",
         DispatcherSelector.fromConfig("boids-dispatcher")
       )
@@ -43,7 +56,6 @@ object BoidsSimulation {
       case BoidVelocityUpdated(boidRef) =>
         counterVelocity += 1
         if (counterVelocity == boids.size) {
-          spacePartitionerRef ! SpacePartitionerActor.Clean
           boids.foreach(_ ! BoidActor.PositionTick)
           counterVelocity = 0
         }

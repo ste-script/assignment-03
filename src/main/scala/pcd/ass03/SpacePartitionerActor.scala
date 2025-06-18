@@ -1,5 +1,7 @@
-import akka.actor.typed.{ActorRef, Behavior}
+package pcd.ass03
+
 import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.{ActorRef, Behavior}
 import pcd.ass01.Model.{P2d, V2d}
 
 object SpacePartitionerActor {

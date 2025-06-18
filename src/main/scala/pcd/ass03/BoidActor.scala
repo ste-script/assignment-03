@@ -1,7 +1,10 @@
-import akka.actor.typed.{ActorRef, Behavior}
-import akka.actor.typed.scaladsl.Behaviors
-import pcd.ass01.Model.{P2d, V2d}
+package pcd.ass03
+
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
+import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.{ActorRef, Behavior}
+import pcd.ass01.Model.{P2d, V2d}
+
 import scala.util.Random
 
 object BoidActor {
@@ -47,7 +50,7 @@ object BoidActor {
              boidSimulation: ActorRef[BoidsSimulation.Command]
            ):
   Behavior[Command] = Behaviors.setup { ctx =>
-    import Config._
+    import Config.*
     val random = new Random()
 
     // State variables

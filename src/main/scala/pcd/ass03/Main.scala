@@ -1,5 +1,7 @@
-import akka.actor.typed.{ActorRef, ActorSystem, Behavior, DispatcherSelector}
+package pcd.ass03
+
 import akka.actor.typed.scaladsl.{Behaviors, Routers}
+import akka.actor.typed.{ActorRef, ActorSystem, Behavior, DispatcherSelector}
 import pcd.ass01.View.ScalaBoidsView
 
 import scala.concurrent.duration.*
@@ -7,6 +9,10 @@ import scala.concurrent.duration.*
 object BoidsSimulation {
   // Message protocol
   sealed trait Command
+
+  case object ResumeSimulation extends Command
+
+  case object PauseSimulation extends Command
 
   case class BoidVelocityUpdated(boidRef: ActorRef[BoidActor.Command]) extends Command
 
@@ -21,6 +27,7 @@ object BoidsSimulation {
   def apply(): Behavior[Command] = Behaviors.setup { context =>
     // Create the view
     val view = new ScalaBoidsView(SimWidth, SimHeight)
+    view.setActorRef(context.self)
 
     // Create actors
     val viewActorRef = context.spawn(ViewActor(view), "viewActor")
@@ -50,28 +57,44 @@ object BoidsSimulation {
     var counterPosition = 0
     var counterVelocity = 0
     var lastFrameTime = 0L
+    var isPaused = false
 
     Behaviors.receiveMessage {
+      case ResumeSimulation =>
+        // Reset counters and last frame time
+        counterPosition = 0
+        counterVelocity = 0
+        lastFrameTime = System.currentTimeMillis()
+        boids.foreach(_ ! BoidActor.VelocityTick)
+        isPaused = false
+        Behaviors.same
+      case PauseSimulation =>
+        isPaused = true
+        Behaviors.same
       case BoidVelocityUpdated(boidRef) =>
-        counterVelocity += 1
-        if (counterVelocity == boids.size) {
-          boids.foreach(_ ! BoidActor.PositionTick)
-          counterVelocity = 0
+        if (!isPaused) {
+          counterVelocity += 1
+          if (counterVelocity == boids.size) {
+            boids.foreach(_ ! BoidActor.PositionTick)
+            counterVelocity = 0
+          }
         }
         Behaviors.same
       case BoidPositionUpdated(boidRef) =>
-        counterPosition += 1
-        if (counterPosition == boids.size) {
-          while (System.currentTimeMillis() - lastFrameTime < TickInterval.toMillis) {
-            // Wait for the tick interval to pass
+        if (!isPaused) {
+          counterPosition += 1
+          if (counterPosition == boids.size) {
+            while (System.currentTimeMillis() - lastFrameTime < TickInterval.toMillis) {
+              // Wait for the tick interval to pass
+            }
+            viewActorRef ! BoidActor.ViewTick
+            boids.foreach(_ ! BoidActor.VelocityTick)
+            counterPosition = 0
+            val elapsedTimeToFps = System.currentTimeMillis() - lastFrameTime
+            val fps = (1000.0 / elapsedTimeToFps).toInt
+            view.update(fps)
+            lastFrameTime = System.currentTimeMillis()
           }
-          viewActorRef ! BoidActor.ViewTick
-          boids.foreach(_ ! BoidActor.VelocityTick)
-          counterPosition = 0
-          val elapsedTimeToFps = System.currentTimeMillis() - lastFrameTime
-          val fps = (1000.0 / elapsedTimeToFps).toInt
-          view.update(fps)
-          lastFrameTime = System.currentTimeMillis()
         }
         Behaviors.same
     }

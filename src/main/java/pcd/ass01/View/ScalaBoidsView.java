@@ -1,5 +1,6 @@
 package pcd.ass01.View;
 
+import akka.actor.typed.ActorRef;
 import pcd.ass01.Model.P2d;
 
 import javax.swing.*;
@@ -10,6 +11,8 @@ import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
 
+import pcd.ass03.BoidsSimulation;
+
 public class ScalaBoidsView implements ChangeListener {
 
     private JFrame frame;
@@ -18,6 +21,8 @@ public class ScalaBoidsView implements ChangeListener {
     private JButton pauseResumeButton, simulationModeButton;
     private int width, height;
     private volatile List<P2d> boids;
+    private ActorRef<BoidsSimulation.Command> actorRef;
+    private Boolean isRunning = true;
 
 
     public ScalaBoidsView(int width, int height) {
@@ -37,6 +42,10 @@ public class ScalaBoidsView implements ChangeListener {
 
         frame.setContentPane(cp);
         frame.setVisible(true);
+    }
+
+    public void setActorRef(ActorRef<BoidsSimulation.Command> actorRef) {
+        this.actorRef = actorRef;
     }
 
     public synchronized void updateAllMapPositions(List<P2d> newMap) {
@@ -113,26 +122,27 @@ public class ScalaBoidsView implements ChangeListener {
     }
 
     private void toggleSimulationState() {
-       /* if (boidsProperty.isSuspended()) {
-            simulationStateHandler.resume();
+        if (isRunning) {
+            actorRef.tell(BoidsSimulation.PauseSimulation$.MODULE$);
         } else {
-            simulationStateHandler.suspend();
+            actorRef.tell(BoidsSimulation.ResumeSimulation$.MODULE$);
         }
-
-        pauseResumeButton.setText(boidsProperty.isSuspended() ? "Resume" : "Pause");*/
+        isRunning = !isRunning;
+        pauseResumeButton.setText(!isRunning ? "Resume" : "Pause");
     }
 
     private void toggleStopSimulation() {
-        /*if (boidsProperty.isRunning()) {
-            simulationStateHandler.stop();
+        /*if (isRunning) {
+            actorRef.tell(new BoidsSimulation.PauseSimulation);
         } else {
             if (boidsProperty.isSuspended()) {
                 toggleSimulationState();
             }
             simulationStateHandler.start();
         }
+        isRunning = !isRunning;
 
-        simulationModeButton.setText(boidsProperty.isRunning() ?  "Stop" : "Start");*/
+        simulationModeButton.setText(boidsProperty.isRunning() ? "Stop" : "Start");*/
     }
 
     private JSlider createSlider() {

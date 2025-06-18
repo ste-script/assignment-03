@@ -1,10 +1,13 @@
-import akka.actor.typed.scaladsl.Behaviors
+package pcd.ass03
+
 import akka.actor.typed.Behavior
+import akka.actor.typed.scaladsl.Behaviors
 import pcd.ass01.Model.P2d
-import scala.jdk.CollectionConverters._
+import pcd.ass01.View.ScalaBoidsView
+import scala.jdk.CollectionConverters.*
 
 object ViewActor {
-  def apply(view: pcd.ass01.View.ScalaBoidsView): Behavior[BoidActor.Command] = Behaviors.setup { ctx =>
+  def apply(view: ScalaBoidsView): Behavior[BoidActor.Command] = Behaviors.setup { ctx =>
     var knownPositions = Seq.empty[P2d]
     Behaviors.receiveMessage {
       case BoidActor.PositionUpdate(ref, pos) =>

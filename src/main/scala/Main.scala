@@ -15,7 +15,7 @@ object BoidsSimulation {
   // Configuration parameters
   private val SimWidth = 800
   private val SimHeight = 800
-  private val NumBoids = 2000
+  private val NumBoids = 4000
   private val TickInterval = 40.millis
 
   def apply(): Behavior[Command] = Behaviors.setup { context =>
@@ -38,7 +38,6 @@ object BoidsSimulation {
       spacePartitionerPool.withBroadcastPredicate(conditionPredicate),
       "spacePartitionerBroadcast"
     )
-    val akkaDispatcher = context.system.settings.config.getConfig("akka.actor.default-dispatcher")
     val boids = (1 to NumBoids).map { i =>
       context.spawn(
         BoidActor(viewActorRef, spacePartitionerBroadcast, context.self),

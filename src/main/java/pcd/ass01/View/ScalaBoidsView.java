@@ -22,6 +22,7 @@ public class ScalaBoidsView implements ChangeListener {
     private int width, height;
     private volatile List<P2d> boids;
     private ActorRef<BoidsSimulation.Command> actorRef;
+    private Boolean isPaused = false;
     private Boolean isRunning = true;
 
 
@@ -122,27 +123,26 @@ public class ScalaBoidsView implements ChangeListener {
     }
 
     private void toggleSimulationState() {
-        if (isRunning) {
+        if (!isPaused) {
             actorRef.tell(BoidsSimulation.PauseSimulation$.MODULE$);
         } else {
             actorRef.tell(BoidsSimulation.ResumeSimulation$.MODULE$);
         }
-        isRunning = !isRunning;
-        pauseResumeButton.setText(!isRunning ? "Resume" : "Pause");
+        isPaused = !isPaused;
+        pauseResumeButton.setText(isPaused ? "Resume" : "Pause");
     }
 
     private void toggleStopSimulation() {
-        /*if (isRunning) {
-            actorRef.tell(new BoidsSimulation.PauseSimulation);
+        if (isRunning) {
+            actorRef.tell(BoidsSimulation.TerminateSimulation$.MODULE$);
         } else {
-            if (boidsProperty.isSuspended()) {
+            if (isPaused) {
                 toggleSimulationState();
             }
-            simulationStateHandler.start();
+            //simulationStateHandler.start();
         }
         isRunning = !isRunning;
-
-        simulationModeButton.setText(boidsProperty.isRunning() ? "Stop" : "Start");*/
+        simulationModeButton.setText(isRunning ? "Stop" : "Start");
     }
 
     private JSlider createSlider() {

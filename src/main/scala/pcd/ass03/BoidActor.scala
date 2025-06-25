@@ -33,6 +33,8 @@ object BoidActor {
   case object PositionTick extends Command
 
   case object ViewTick extends Command
+  
+  case object Terminate extends Command
 
   private final case class UpdatedBoidList(allBoids: Set[ActorRef[Command]]) extends Command
 
@@ -146,7 +148,11 @@ object BoidActor {
         viewActor ! PositionUpdate(ctx.self, position)
         boidSimulation ! BoidsSimulation.BoidPositionUpdated(ctx.self)
         Behaviors.same
-
+      case Terminate =>
+        ctx.log.info(s"Terminating boid actor ${ctx.self.path.name}")
+        ctx.system.receptionist ! Receptionist.Deregister(BoidServiceKey, ctx.self)
+        Behaviors.stopped
+        
       case _ => Behaviors.unhandled
     }
   }

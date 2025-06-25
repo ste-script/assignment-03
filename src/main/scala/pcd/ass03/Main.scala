@@ -13,6 +13,7 @@ object BoidsSimulation {
   case object ResumeSimulation extends Command
 
   case object PauseSimulation extends Command
+  case object TerminateSimulation extends Command
 
   case class BoidVelocityUpdated(boidRef: ActorRef[BoidActor.Command]) extends Command
 
@@ -21,12 +22,17 @@ object BoidsSimulation {
   // Configuration parameters
   private val SimWidth = 800
   private val SimHeight = 800
-  private val NumBoids = 4000
+  private val NumBoids = 2000
   private val TickInterval = 40.millis
 
+
   def apply(): Behavior[Command] = Behaviors.setup { context =>
-    // Create the view
+    var counterPosition = 0
+    var counterVelocity = 0
+    var lastFrameTime = 0L
     val view = new ScalaBoidsView(SimWidth, SimHeight)
+    var boids: Seq[ActorRef[BoidActor.Command]] = Seq.empty
+    // Create the view
     view.setActorRef(context.self)
 
     // Create actors
@@ -45,7 +51,7 @@ object BoidsSimulation {
       spacePartitionerPool.withBroadcastPredicate(conditionPredicate),
       "spacePartitionerBroadcast"
     )
-    val boids = (1 to NumBoids).map { i =>
+    boids = (1 to NumBoids).map { i =>
       context.spawn(
         BoidActor(viewActorRef, spacePartitionerBroadcast, context.self),
         s"boid-$i",
@@ -54,50 +60,51 @@ object BoidsSimulation {
     }
 
     boids.foreach(_ ! BoidActor.VelocityTick)
-    var counterPosition = 0
-    var counterVelocity = 0
-    var lastFrameTime = 0L
-    var isPaused = false
 
-    Behaviors.receiveMessage {
+    def pauseState: Behavior[Command] = Behaviors.receiveMessage {
       case ResumeSimulation =>
         // Reset counters and last frame time
         counterPosition = 0
         counterVelocity = 0
         lastFrameTime = System.currentTimeMillis()
         boids.foreach(_ ! BoidActor.VelocityTick)
-        isPaused = false
-        Behaviors.same
-      case PauseSimulation =>
-        isPaused = true
-        Behaviors.same
+        runningState
+      case _ => Behaviors.same // Ignore other messages
+    }
+
+    def runningState: Behavior[Command] = Behaviors.receiveMessage {
+      case PauseSimulation => pauseState // Transition to pause state
+      case TerminateSimulation =>
+        // Terminate all boids and the view actor
+        boids.foreach(_ ! BoidActor.Terminate)
+        Behaviors.stopped
       case BoidVelocityUpdated(boidRef) =>
-        if (!isPaused) {
-          counterVelocity += 1
-          if (counterVelocity == boids.size) {
-            boids.foreach(_ ! BoidActor.PositionTick)
-            counterVelocity = 0
-          }
+        counterVelocity += 1
+        if (counterVelocity == boids.size) {
+          boids.foreach(_ ! BoidActor.PositionTick)
+          counterVelocity = 0
         }
         Behaviors.same
       case BoidPositionUpdated(boidRef) =>
-        if (!isPaused) {
-          counterPosition += 1
-          if (counterPosition == boids.size) {
-            while (System.currentTimeMillis() - lastFrameTime < TickInterval.toMillis) {
-              // Wait for the tick interval to pass
-            }
-            viewActorRef ! BoidActor.ViewTick
-            boids.foreach(_ ! BoidActor.VelocityTick)
-            counterPosition = 0
-            val elapsedTimeToFps = System.currentTimeMillis() - lastFrameTime
-            val fps = (1000.0 / elapsedTimeToFps).toInt
-            view.update(fps)
-            lastFrameTime = System.currentTimeMillis()
+        counterPosition += 1
+        if (counterPosition == boids.size) {
+          while (System.currentTimeMillis() - lastFrameTime < TickInterval.toMillis) {
+            // Wait for the tick interval to pass
           }
+          viewActorRef ! BoidActor.ViewTick
+          boids.foreach(_ ! BoidActor.VelocityTick)
+          counterPosition = 0
+          val elapsedTimeToFps = System.currentTimeMillis() - lastFrameTime
+          val fps = (1000.0 / elapsedTimeToFps).toInt
+          view.update(fps)
+          lastFrameTime = System.currentTimeMillis()
         }
         Behaviors.same
+      case ResumeSimulation => Behaviors.same
     }
+
+    runningState
+
   }
 }
 

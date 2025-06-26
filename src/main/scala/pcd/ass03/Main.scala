@@ -85,10 +85,6 @@ object BoidsSimulation {
         counterVelocity = 0
         lastFrameTime = System.currentTimeMillis()
         runningState // Transition to running state
-      case TerminateSimulation =>
-        // Terminate all boids and the view actor
-        boids.foreach(_ ! BoidActor.Terminate)
-        Behaviors.stopped
       case _ => Behaviors.same // Ignore other messages
     }
 
@@ -111,7 +107,7 @@ object BoidsSimulation {
           while (System.currentTimeMillis() - lastFrameTime < TickInterval.toMillis) {
             // Wait for the tick interval to pass
           }
-          viewActorRef ! BoidActor.ViewTick
+          viewActorRef ! ViewActor.ViewTick
           boids.foreach(_ ! BoidActor.VelocityTick)
           counterPosition = 0
           val elapsedTimeToFps = System.currentTimeMillis() - lastFrameTime

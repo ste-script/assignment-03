@@ -1,24 +1,33 @@
 package pcd.ass03
 
-import akka.actor.typed.Behavior
+import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
 import pcd.ass01.Model.P2d
 import pcd.ass01.View.ScalaBoidsView
+
 import scala.jdk.CollectionConverters.*
 
 object ViewActor {
-  def apply(view: ScalaBoidsView): Behavior[BoidActor.Command] = Behaviors.setup { ctx =>
-    var knownPositions = Seq.empty[P2d]
+  sealed trait Command
+
+  final case class BoidPositionUpdate(ref: ActorRef[BoidActor.Command], pos: P2d) extends Command
+
+  case object ViewTick extends Command
+
+  final case class BoidTerminated(ref: ActorRef[BoidActor.Command]) extends Command
+
+  def apply(view: ScalaBoidsView): Behavior[ViewActor.Command] = Behaviors.setup { ctx =>
+    var knownPositions = Map.empty[ActorRef[BoidActor.Command], P2d]
     Behaviors.receiveMessage {
-      case BoidActor.PositionUpdate(ref, pos) =>
-        knownPositions = pos +: knownPositions
+      case ViewActor.BoidPositionUpdate(ref, pos) =>
+        knownPositions = knownPositions.updated(ref, pos)
         Behaviors.same
-      case BoidActor.ViewTick =>
-        view.updateAllMapPositions(knownPositions.asJava)
-        knownPositions = Seq.empty[P2d] // Clear the positions after updating the view
+      case ViewActor.ViewTick =>
+        view.updateAllMapPositions(knownPositions.values.toList.asJava)
         Behaviors.same
-      case _ =>
-        Behaviors.unhandled
+      case ViewActor.BoidTerminated(ref) =>
+        knownPositions = knownPositions - ref
+        Behaviors.same
     }
   }
 }

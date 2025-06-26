@@ -5,7 +5,6 @@ import pcd.ass01.View.BoidPattern.ShapeDrawer;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.HashMap;
 import java.util.List;
 
 public class ScalaBoidsPanel extends JPanel {

@@ -135,6 +135,8 @@ public class ScalaBoidsView implements ChangeListener {
     private void toggleStopSimulation() {
         if (isRunning) {
             actorRef.tell(BoidsSimulation.TerminateSimulation$.MODULE$);
+            boidsPanel.setBoids(List.of());
+            boidsPanel.repaint();
         } else {
             if (isPaused) {
                 toggleSimulationState();

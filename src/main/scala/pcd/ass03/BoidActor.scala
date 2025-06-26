@@ -31,8 +31,6 @@ object BoidActor {
 
   case object PositionTick extends Command
 
-  case object ViewTick extends Command
-  
   case object Terminate extends Command
 
   private final case class UpdatedBoidList(allBoids: Set[ActorRef[Command]]) extends Command
@@ -44,7 +42,7 @@ object BoidActor {
   final case class NeighborsResult(neighbors: Seq[(P2d, V2d)]) extends Command
 
   def apply(
-             viewActor: ActorRef[Command],
+             viewActor: ActorRef[ViewActor.Command],
              spacePartitioner: ActorRef[SpacePartitionerActor.Command],
              boidSimulation: ActorRef[BoidsSimulation.Command]
            ):
@@ -138,14 +136,13 @@ object BoidActor {
       case PositionTick =>
         position = wrapPosition(position.sum(velocity))
         spacePartitioner ! SpacePartitionerActor.UpdateBoidPosition(ctx.self, position)
-        viewActor ! PositionUpdate(ctx.self, position)
+        viewActor ! ViewActor.BoidPositionUpdate(ctx.self, position)
         boidSimulation ! BoidsSimulation.BoidPositionUpdated(ctx.self)
         Behaviors.same
       case Terminate =>
-        ctx.log.info(s"Terminating boid actor ${ctx.self.path.name}")
         spacePartitioner ! SpacePartitionerActor.BoidTerminated(ctx.self)
+        viewActor ! ViewActor.BoidTerminated(ctx.self)
         Behaviors.stopped
-        
       case _ => Behaviors.unhandled
     }
   }

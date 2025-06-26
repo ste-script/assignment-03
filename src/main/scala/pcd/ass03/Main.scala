@@ -13,7 +13,10 @@ object BoidsSimulation {
   case object ResumeSimulation extends Command
 
   case object PauseSimulation extends Command
+
   case object TerminateSimulation extends Command
+
+  case object StartSimulation extends Command
 
   case class BoidVelocityUpdated(boidRef: ActorRef[BoidActor.Command]) extends Command
 
@@ -51,15 +54,6 @@ object BoidsSimulation {
       spacePartitionerPool.withBroadcastPredicate(conditionPredicate),
       "spacePartitionerBroadcast"
     )
-    boids = (1 to NumBoids).map { i =>
-      context.spawn(
-        BoidActor(viewActorRef, spacePartitionerBroadcast, context.self),
-        s"boid-$i",
-        DispatcherSelector.fromConfig("boids-dispatcher")
-      )
-    }
-
-    boids.foreach(_ ! BoidActor.VelocityTick)
 
     def pauseState: Behavior[Command] = Behaviors.receiveMessage {
       case ResumeSimulation =>
@@ -69,6 +63,32 @@ object BoidsSimulation {
         lastFrameTime = System.currentTimeMillis()
         boids.foreach(_ ! BoidActor.VelocityTick)
         runningState
+      case TerminateSimulation =>
+        // Terminate all boids and the view actor
+        boids.foreach(_ ! BoidActor.Terminate)
+        Behaviors.stopped
+      case _ => Behaviors.same // Ignore other messages
+    }
+
+    def terminatedState: Behavior[Command] = Behaviors.receiveMessage {
+      case StartSimulation =>
+        // Reset counters and last frame time
+        boids = (1 to NumBoids).map { i =>
+          context.spawn(
+            BoidActor(viewActorRef, spacePartitionerBroadcast, context.self),
+            s"boid-$i",
+            DispatcherSelector.fromConfig("boids-dispatcher")
+          )
+        }
+        boids.foreach(_ ! BoidActor.VelocityTick)
+        counterPosition = 0
+        counterVelocity = 0
+        lastFrameTime = System.currentTimeMillis()
+        runningState // Transition to running state
+      case TerminateSimulation =>
+        // Terminate all boids and the view actor
+        boids.foreach(_ ! BoidActor.Terminate)
+        Behaviors.stopped
       case _ => Behaviors.same // Ignore other messages
     }
 
@@ -77,7 +97,7 @@ object BoidsSimulation {
       case TerminateSimulation =>
         // Terminate all boids and the view actor
         boids.foreach(_ ! BoidActor.Terminate)
-        Behaviors.stopped
+        terminatedState
       case BoidVelocityUpdated(boidRef) =>
         counterVelocity += 1
         if (counterVelocity == boids.size) {
@@ -100,11 +120,10 @@ object BoidsSimulation {
           lastFrameTime = System.currentTimeMillis()
         }
         Behaviors.same
-      case ResumeSimulation => Behaviors.same
+      case _ => Behaviors.same
     }
 
-    runningState
-
+    terminatedState
   }
 }
 
@@ -112,7 +131,7 @@ object BoidsSimulation {
 @main
 def main(): Unit = {
   val system = ActorSystem(BoidsSimulation(), "BoidSystem")
-
+  system ! BoidsSimulation.StartSimulation
   // Exit on Ctrl-C
   sys.addShutdownHook {
     system.terminate()

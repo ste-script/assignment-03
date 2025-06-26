@@ -8,6 +8,8 @@ object SpacePartitionerActor {
   // Message protocol
   sealed trait Command
 
+  final case class BoidTerminated(boidRef: ActorRef[BoidActor.Command]) extends Command
+
   final case class UpdateBoidPosition(boidRef: ActorRef[BoidActor.Command], position: P2d) extends Command
 
   final case class UpdateBoidVelocity(boidRef: ActorRef[BoidActor.Command], velocity: V2d) extends Command
@@ -23,6 +25,10 @@ object SpacePartitionerActor {
     var velocities = Map.empty[ActorRef[BoidActor.Command], V2d]
 
     Behaviors.receiveMessage {
+      case BoidTerminated(boidRef) =>
+        positions = positions - boidRef
+        velocities = velocities - boidRef
+        Behaviors.same
       case UpdateBoidPosition(boidRef, position) =>
         positions = positions.updated(boidRef, position)
         Behaviors.same

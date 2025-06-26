@@ -1,6 +1,5 @@
 package pcd.ass03
 
-import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
 import pcd.ass01.Model.{P2d, V2d}
@@ -43,8 +42,6 @@ object BoidActor {
   private case class VelocityUpdate(boidRef: ActorRef[Command], velocity: V2d) extends Command
 
   final case class NeighborsResult(neighbors: Seq[(P2d, V2d)]) extends Command
-
-  private val BoidServiceKey: ServiceKey[Command] = ServiceKey[Command]("Boid")
 
   def apply(
              viewActor: ActorRef[Command],
@@ -121,10 +118,6 @@ object BoidActor {
       P2d(x, y)
     }
 
-    // Register with receptionist
-    ctx.system.receptionist ! Receptionist.Register(BoidServiceKey, ctx.self)
-
-    // Initialize the space partitioner with our position and velocity
     spacePartitioner ! SpacePartitionerActor.UpdateBoidVelocity(ctx.self, velocity)
     spacePartitioner ! SpacePartitionerActor.UpdateBoidPosition(ctx.self, position)
 
@@ -150,7 +143,7 @@ object BoidActor {
         Behaviors.same
       case Terminate =>
         ctx.log.info(s"Terminating boid actor ${ctx.self.path.name}")
-        ctx.system.receptionist ! Receptionist.Deregister(BoidServiceKey, ctx.self)
+        spacePartitioner ! SpacePartitionerActor.BoidTerminated(ctx.self)
         Behaviors.stopped
         
       case _ => Behaviors.unhandled

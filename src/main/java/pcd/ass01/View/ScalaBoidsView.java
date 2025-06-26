@@ -139,7 +139,7 @@ public class ScalaBoidsView implements ChangeListener {
             if (isPaused) {
                 toggleSimulationState();
             }
-            //simulationStateHandler.start();
+            actorRef.tell(BoidsSimulation.StartSimulation$.MODULE$);
         }
         isRunning = !isRunning;
         simulationModeButton.setText(isRunning ? "Stop" : "Start");

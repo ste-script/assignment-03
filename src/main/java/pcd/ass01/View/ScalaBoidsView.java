@@ -25,7 +25,6 @@ public class ScalaBoidsView implements ChangeListener {
     private Boolean isPaused = false;
     private Boolean isRunning = true;
 
-
     public ScalaBoidsView(int width, int height) {
         this.width = width;
         this.height = height;
@@ -181,9 +180,10 @@ public class ScalaBoidsView implements ChangeListener {
         return slider;
     }
 
-    public synchronized void update(int frameRate) {
+    public void update(int frameRate) {
         boidsPanel.setFrameRate(frameRate);
-        boidsPanel.repaint();
+        // Use SwingUtilities.invokeLater to avoid blocking the actor thread
+        SwingUtilities.invokeLater(boidsPanel::repaint);
     }
 
     @Override

@@ -4,7 +4,7 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
 import pcd.ass01.Model.{P2d, V2d}
 
-object SpacePartitionerActor {
+object SpacePartitionerActor:
   // Message protocol
   sealed trait Command
 
@@ -15,10 +15,10 @@ object SpacePartitionerActor {
   final case class UpdateBoidVelocity(boidRef: ActorRef[BoidActor.Command], velocity: V2d) extends Command
 
   final case class FindNeighbors(
-                                  boidRef: ActorRef[BoidActor.Command],
-                                  position: P2d,
-                                  perceptionRadius: Double
-                                ) extends Command
+      boidRef: ActorRef[BoidActor.Command],
+      position: P2d,
+      perceptionRadius: Double
+  ) extends Command
 
   def apply(): Behavior[Command] = Behaviors.setup { ctx =>
     var positions = Map.empty[ActorRef[BoidActor.Command], P2d]
@@ -38,13 +38,11 @@ object SpacePartitionerActor {
         Behaviors.same
 
       case FindNeighbors(boidRef, position, perceptionRadius) =>
-        if (positions.size != velocities.size) {
+        if positions.size != velocities.size then
           ctx.log.warn(s"${positions.size} positions and ${velocities.size} velocities do not match!")
-        }
         val neighbors = for (r, p) <- positions if r != boidRef && p.distance(position) <= perceptionRadius
-          yield (p, velocities.getOrElse(r, V2d(0, 0)))
+        yield (p, velocities.getOrElse(r, V2d(0, 0)))
         boidRef ! BoidActor.NeighborsResult(neighbors.toSeq)
         Behaviors.same
     }
   }
-}

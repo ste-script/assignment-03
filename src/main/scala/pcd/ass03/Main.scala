@@ -6,7 +6,7 @@ import pcd.ass01.View.ScalaBoidsView
 
 import scala.concurrent.duration.*
 
-object BoidsSimulation {
+object BoidsSimulation:
   // Message protocol
   sealed trait Command
 
@@ -28,11 +28,11 @@ object BoidsSimulation {
   private val NumBoids = 2000
   private val TickInterval = 40.millis
 
-
   def apply(): Behavior[Command] = Behaviors.setup { context =>
     var counterPosition = 0
     var counterVelocity = 0
     var lastFrameTime = 0L
+    var goToTerminatedState = false
     val view = new ScalaBoidsView(SimWidth, SimHeight)
     var boids: Seq[ActorRef[BoidActor.Command]] = Seq.empty
     // Create the view
@@ -41,7 +41,7 @@ object BoidsSimulation {
     // Create actors
     val viewActorRef = context.spawn(ViewActor(view), "viewActor")
     val availableCores = Runtime.getRuntime.availableProcessors() + 1
-    val spacePartitionerPool = Routers.pool(availableCores) {
+    val spacePartitionerPool = Routers.pool(4) {
       SpacePartitionerActor()
     }
 
@@ -80,10 +80,10 @@ object BoidsSimulation {
             DispatcherSelector.fromConfig("boids-dispatcher")
           )
         }
+        viewActorRef ! ViewActor.SimulationStarted
         boids.foreach(_ ! BoidActor.VelocityTick)
         counterPosition = 0
         counterVelocity = 0
-        lastFrameTime = System.currentTimeMillis()
         runningState // Transition to running state
       case _ => Behaviors.same // Ignore other messages
     }
@@ -91,20 +91,23 @@ object BoidsSimulation {
     def runningState: Behavior[Command] = Behaviors.receiveMessage {
       case PauseSimulation => pauseState // Transition to pause state
       case TerminateSimulation =>
-        // Terminate all boids and the view actor
-        boids.foreach(_ ! BoidActor.Terminate)
-        terminatedState
+        goToTerminatedState = true
+        Behaviors.same
       case BoidVelocityUpdated(boidRef) =>
         counterVelocity += 1
-        if (counterVelocity == boids.size) {
+        if counterVelocity == boids.size then
           boids.foreach(_ ! BoidActor.PositionTick)
           counterVelocity = 0
-        }
         Behaviors.same
       case BoidPositionUpdated(boidRef) =>
         counterPosition += 1
-        if (counterPosition == boids.size) {
-          while (System.currentTimeMillis() - lastFrameTime < TickInterval.toMillis) {
+        if counterPosition == boids.size && goToTerminatedState then
+          goToTerminatedState = false
+          boids.foreach(_ ! BoidActor.Terminate)
+          viewActorRef ! ViewActor.SimulationStopped
+          terminatedState
+        else if counterPosition == boids.size then
+          while System.currentTimeMillis() - lastFrameTime < TickInterval.toMillis do {
             // Wait for the tick interval to pass
           }
           viewActorRef ! ViewActor.ViewTick
@@ -114,22 +117,19 @@ object BoidsSimulation {
           val fps = (1000.0 / elapsedTimeToFps).toInt
           view.update(fps)
           lastFrameTime = System.currentTimeMillis()
-        }
-        Behaviors.same
+          Behaviors.same
+        else Behaviors.same
       case _ => Behaviors.same
     }
 
     terminatedState
   }
-}
-
 
 @main
-def main(): Unit = {
+def main(): Unit =
   val system = ActorSystem(BoidsSimulation(), "BoidSystem")
   system ! BoidsSimulation.StartSimulation
   // Exit on Ctrl-C
   sys.addShutdownHook {
     system.terminate()
   }
-}

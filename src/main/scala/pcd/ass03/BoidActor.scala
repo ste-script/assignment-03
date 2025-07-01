@@ -6,9 +6,9 @@ import pcd.ass01.Model.{P2d, V2d}
 
 import scala.util.Random
 
-object BoidActor {
+object BoidActor:
   // Configuration parameters
-  private object Config {
+  private object Config:
     val Width = 1000
     val Height = 1000
     val PerceptionRadius = 50.0
@@ -22,7 +22,6 @@ object BoidActor {
     val MaxX: Int = Width / 2
     val MinY: Int = -Height / 2
     val MaxY: Int = Height / 2
-  }
 
   // Message protocol
   sealed trait Command
@@ -33,20 +32,13 @@ object BoidActor {
 
   case object Terminate extends Command
 
-  private final case class UpdatedBoidList(allBoids: Set[ActorRef[Command]]) extends Command
-
-  final case class PositionUpdate(boidRef: ActorRef[Command], position: P2d) extends Command
-
-  private case class VelocityUpdate(boidRef: ActorRef[Command], velocity: V2d) extends Command
-
   final case class NeighborsResult(neighbors: Seq[(P2d, V2d)]) extends Command
 
   def apply(
-             viewActor: ActorRef[ViewActor.Command],
-             spacePartitioner: ActorRef[SpacePartitionerActor.Command],
-             boidSimulation: ActorRef[BoidsSimulation.Command]
-           ):
-  Behavior[Command] = Behaviors.setup { ctx =>
+      viewActor: ActorRef[ViewActor.Command],
+      spacePartitioner: ActorRef[SpacePartitionerActor.Command],
+      boidSimulation: ActorRef[BoidsSimulation.Command]
+  ): Behavior[Command] = Behaviors.setup { ctx =>
     import Config.*
     val random = new Random()
 
@@ -61,60 +53,73 @@ object BoidActor {
       random.nextDouble() * MaxSpeed - MaxSpeed / 2
     )
 
-    def calculateFlocking(neighbors: Seq[(P2d, V2d)]): V2d = {
-      var separationX, separationY = 0.0
-      var separationCount = 0
-      var alignmentX, alignmentY = 0.0
-      var cohesionX, cohesionY = 0.0
-      neighbors.foreach { case (pos, vel) =>
-        val distance = position.distance(pos)
+    def calculateSeparation(nearbyBoids: Seq[(P2d, V2d)]) =
+      var dx: Double = 0
+      var dy: Double = 0
+      var count = 0
+      for other <- nearbyBoids do
+        val otherPos = other._1
+        val distance = position.distance(otherPos)
+        if distance < AvoidRadius then
+          dx += position.x - otherPos.x
+          dy += position.y - otherPos.y
+          count += 1
+      if count > 0 then
+        dx /= count
+        dy /= count
+        V2d(dx, dy).getNormalized
+      else V2d(0, 0)
 
-        // Separation - only consider close neighbors
-        if (distance < AvoidRadius && distance > 0) {
-          separationX += (position.x - pos.x) / (distance * distance)
-          separationY += (position.y - pos.y) / (distance * distance)
-          separationCount += 1
-        }
+    def calculateCohesion(nearbyBoids: Seq[(P2d, V2d)]) =
+      var centerX: Double = 0
+      var centerY: Double = 0
+      if nearbyBoids.nonEmpty then
+        for other <- nearbyBoids do
+          val otherPos = other._1
+          centerX += otherPos.x
+          centerY += otherPos.y
+        centerX /= nearbyBoids.size
+        centerY /= nearbyBoids.size
+        V2d(centerX - position.x, centerY - position.y).getNormalized
+      else V2d(0, 0)
 
-        // Alignment - consider velocity
-        alignmentX += vel.x
-        alignmentY += vel.y
+    def calculateAlignment(nearbyBoids: Seq[(P2d, V2d)]) =
+      var avgVx: Double = 0
+      var avgVy: Double = 0
+      if nearbyBoids.nonEmpty then
+        for other <- nearbyBoids do
+          val otherVel = other._2
+          avgVx += otherVel.x
+          avgVy += otherVel.y
+        avgVx /= nearbyBoids.size
+        avgVy /= nearbyBoids.size
+        V2d(avgVx - velocity.x, avgVy - velocity.y).getNormalized
+      else V2d(0, 0)
 
-        // Cohesion - consider position
-        cohesionX += pos.x
-        cohesionY += pos.y
-      }
-
-      // Calculate final vectors
-      val separation = if (separationCount > 0) {
-        V2d(separationX, separationY).getNormalized
-      } else V2d(0, 0)
-
-      val alignment = V2d(
-        alignmentX / neighbors.size - velocity.x,
-        alignmentY / neighbors.size - velocity.y
-      ).getNormalized
-
-      val center = P2d(cohesionX / neighbors.size, cohesionY / neighbors.size)
-      val cohesion = V2d(center.x - position.x, center.y - position.y).getNormalized
-
-      // Combine forces
-      val newVelocity = velocity
+    def updateVelocity(neighbors: Seq[(P2d, V2d)]): Unit =
+      val separation: V2d = calculateSeparation(neighbors)
+      val alignment: V2d = calculateAlignment(neighbors)
+      val cohesion: V2d = calculateCohesion(neighbors)
+      velocity = velocity
+        .sum(
+          alignment.mul(AlignmentWeight)
+        )
         .sum(separation.mul(SeparationWeight))
-        .sum(alignment.mul(AlignmentWeight))
-        .sum(cohesion.mul(CohesionWeight))
+        .sum(
+          cohesion.mul(CohesionWeight)
+        )
 
-      // Limit speed
-      val speed = newVelocity.abs()
-      if (speed > MaxSpeed) newVelocity.getNormalized.mul(MaxSpeed) else newVelocity
-    }
+      val speed = velocity.abs()
+      if speed > MaxSpeed then velocity = velocity.getNormalized.mul(MaxSpeed)
 
     // Helper for boundary wrapping
-    def wrapPosition(pos: P2d): P2d = {
-      val x = if (pos.x < MinX) pos.x + Width else if (pos.x > MaxX) pos.x - Width else pos.x
-      val y = if (pos.y < MinY) pos.y + Height else if (pos.y > MaxY) pos.y - Height else pos.y
-      P2d(x, y)
-    }
+    def wrapPosition(pos: P2d): P2d =
+      var p = pos
+      if pos.x < MinX then p = p.sum(new V2d(Width, 0))
+      if pos.x >= MaxX then p = p.sum(new V2d(-Width, 0))
+      if pos.y < MinY then p = p.sum(new V2d(0, Height))
+      if pos.y >= MaxY then p = p.sum(new V2d(0, -Height))
+      p
 
     spacePartitioner ! SpacePartitionerActor.UpdateBoidVelocity(ctx.self, velocity)
     spacePartitioner ! SpacePartitionerActor.UpdateBoidPosition(ctx.self, position)
@@ -122,13 +127,14 @@ object BoidActor {
     Behaviors.receiveMessage {
       case VelocityTick =>
         spacePartitioner ! SpacePartitionerActor.FindNeighbors(
-          ctx.self, position, PerceptionRadius
+          ctx.self,
+          position,
+          PerceptionRadius
         )
         Behaviors.same
 
       case NeighborsResult(neighbors) =>
-        val newVelocity = calculateFlocking(neighbors)
-        velocity = newVelocity
+        updateVelocity(neighbors)
         spacePartitioner ! SpacePartitionerActor.UpdateBoidVelocity(ctx.self, velocity)
         boidSimulation ! BoidsSimulation.BoidVelocityUpdated(ctx.self)
         Behaviors.same
@@ -146,4 +152,3 @@ object BoidActor {
       case _ => Behaviors.unhandled
     }
   }
-}

@@ -149,6 +149,5 @@ object BoidActor:
         spacePartitioner ! SpacePartitionerActor.BoidTerminated(ctx.self)
         viewActor ! ViewActor.BoidTerminated(ctx.self)
         Behaviors.stopped
-      case _ => Behaviors.unhandled
     }
   }

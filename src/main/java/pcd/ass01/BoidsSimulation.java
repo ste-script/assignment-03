@@ -41,7 +41,7 @@ public class BoidsSimulation {
 	 * - THREAD_COUNT must a number smaller than the total amount of patterns
 	 */
 	final static int THREAD_COUNT = 10;
-	final static BoidsSimulatorType SIMULATOR_TYPE = BoidsSimulatorType.VIRTUAL_THREADS;
+	final static BoidsSimulatorType SIMULATOR_TYPE = BoidsSimulatorType.EXECUTOR;
 
 	public static void main(String[] args) {
 		var model = new BoidsModel(

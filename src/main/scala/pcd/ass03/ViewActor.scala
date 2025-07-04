@@ -12,7 +12,7 @@ object ViewActor:
 
   final case class BoidPositionUpdate(ref: ActorRef[BoidActor.Command], pos: P2d) extends Command
 
-  case object ViewTick extends Command
+  final case class ViewTick(fps: Int) extends Command
 
   final case class BoidTerminated(ref: ActorRef[BoidActor.Command]) extends Command
 
@@ -45,8 +45,9 @@ object ViewActor:
           boidsPositions = boidsPositions.removed(boidRef)
           Behaviors.same
 
-        case ViewTick =>
+        case ViewTick(fps) =>
           if isSimulationRunning then view.updateAllMapPositions(boidsPositions.values.toList.asJava)
+          view.update(fps)
           Behaviors.same
 
         case SimulationStopped =>

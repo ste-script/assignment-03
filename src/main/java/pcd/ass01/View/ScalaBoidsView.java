@@ -182,8 +182,7 @@ public class ScalaBoidsView implements ChangeListener {
 
     public void update(int frameRate) {
         boidsPanel.setFrameRate(frameRate);
-        // Use SwingUtilities.invokeLater to avoid blocking the actor thread
-        SwingUtilities.invokeLater(boidsPanel::repaint);
+        boidsPanel.repaint();
     }
 
     @Override

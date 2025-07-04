@@ -55,18 +55,15 @@ object BoidsSimulation:
         "spacePartitionerBroadcast"
       )
 
-      def startTick(): Unit = {
-        timers.startTimerWithFixedDelay(TickTimerKey, Tick, TickInterval)
-      }
+      def startTick(): Unit =
+        timers.startTimerAtFixedRate(TickTimerKey, Tick, TickInterval)
 
-      def stopTick(): Unit = {
+      def stopTick(): Unit =
         timers.cancel(TickTimerKey)
-      }
 
-      def resetCounters(): Unit = {
+      def resetCounters(): Unit =
         counterPosition = 0
         counterVelocity = 0
-      }
 
       def pauseState: Behavior[Command] = Behaviors.receiveMessage {
         case ResumeSimulation =>
@@ -130,21 +127,20 @@ object BoidsSimulation:
               terminatedState
             else
               // Complete the frame
-              viewActorRef ! ViewActor.ViewTick
 
               // Calculate and update FPS
               val currentTime = System.currentTimeMillis()
               val elapsedTime = currentTime - lastFrameTime
-              if elapsedTime > 0 then
-                val fps = (1000.0 / elapsedTime).toInt
-                view.update(fps)
+              val fps = if elapsedTime > 0 then (1000.0 / elapsedTime).toInt else 0
               lastFrameTime = currentTime
+              viewActorRef ! ViewActor.ViewTick(fps)
+              // Reset counters for next frame
+              resetCounters()
 
               // Reset counter for next frame
               counterPosition = 0
               Behaviors.same
-          else
-            Behaviors.same
+          else Behaviors.same
 
         case _ => Behaviors.same
       }

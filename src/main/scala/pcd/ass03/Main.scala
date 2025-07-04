@@ -1,7 +1,7 @@
 package pcd.ass03
 
-import akka.actor.typed.scaladsl.{Behaviors, Routers, TimerScheduler}
-import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
+import akka.actor.typed.scaladsl.{Behaviors, Routers}
+import akka.actor.typed.{ActorRef, ActorSystem, Behavior, DispatcherSelector}
 import pcd.ass01.View.ScalaBoidsView
 
 import scala.concurrent.duration.*
@@ -11,13 +11,17 @@ object BoidsSimulation:
   sealed trait Command
 
   case object ResumeSimulation extends Command
-  private case object Tick extends Command // Keep original name for simplicity
+
+  case object SimulationTick extends Command
 
   case object PauseSimulation extends Command
+
   case object TerminateSimulation extends Command
+
   case object StartSimulation extends Command
 
   case class BoidVelocityUpdated(boidRef: ActorRef[BoidActor.Command]) extends Command
+
   case class BoidPositionUpdated(boidRef: ActorRef[BoidActor.Command]) extends Command
 
   // Configuration parameters
@@ -25,23 +29,28 @@ object BoidsSimulation:
   private val SimHeight = 800
   private val NumBoids = 2000
   private val TickInterval = 40.millis
-  private val TickTimerKey = "TickTimer"
 
   def apply(): Behavior[Command] = Behaviors.setup { context =>
     Behaviors.withTimers { timers =>
       var counterPosition = 0
       var counterVelocity = 0
       var lastFrameTime = 0L
-      var pendingTermination = false
-      val view = new ScalaBoidsView(SimWidth, SimHeight)
+      var goToTerminatedState = false
       var boids: Seq[ActorRef[BoidActor.Command]] = Seq.empty
 
+      def startTick =
+        timers.startTimerAtFixedRate("tick", SimulationTick, TickInterval)
+
       // Create the view
-      view.setActorRef(context.self)
+      def spawnView =
+        val view = new ScalaBoidsView(SimWidth, SimHeight)
+        view.setActorRef(context.self)
+        view
 
       // Create actors
-      val viewActorRef = context.spawn(ViewActor(view), "viewActor")
-      val spacePartitionerPool = Routers.pool(4) {
+      val viewActorRef = context.spawn(ViewActor(spawnView), "viewActor")
+      val availableCores = Runtime.getRuntime.availableProcessors()
+      val spacePartitionerPool = Routers.pool(availableCores / 4) {
         SpacePartitionerActor()
       }
 
@@ -55,30 +64,26 @@ object BoidsSimulation:
         "spacePartitionerBroadcast"
       )
 
-      def startTick(): Unit =
-        timers.startTimerAtFixedRate(TickTimerKey, Tick, TickInterval)
-
-      def stopTick(): Unit =
-        timers.cancel(TickTimerKey)
-
-      def resetCounters(): Unit =
-        counterPosition = 0
-        counterVelocity = 0
-
       def pauseState: Behavior[Command] = Behaviors.receiveMessage {
         case ResumeSimulation =>
-          resetCounters()
+          startTick
+          // Reset counters and last frame time
+          counterPosition = 0
+          counterVelocity = 0
           lastFrameTime = System.currentTimeMillis()
-          startTick()
+          boids.foreach(_ ! BoidActor.VelocityTick)
           runningState
         case TerminateSimulation =>
+          // Terminate all boids and the view actor
           boids.foreach(_ ! BoidActor.Terminate)
           Behaviors.stopped
-        case _ => Behaviors.same
+        case _ => Behaviors.same // Ignore other messages
       }
 
       def terminatedState: Behavior[Command] = Behaviors.receiveMessage {
         case StartSimulation =>
+          startTick
+          // Reset counters and last frame time
           boids = (1 to NumBoids).map { i =>
             context.spawn(
               BoidActor(viewActorRef, spacePartitionerBroadcast, context.self),
@@ -86,74 +91,57 @@ object BoidsSimulation:
             )
           }
           viewActorRef ! ViewActor.SimulationStarted
-          resetCounters()
-          pendingTermination = false
-          lastFrameTime = System.currentTimeMillis()
-          startTick()
-          runningState
-        case _ => Behaviors.same
+          boids.foreach(_ ! BoidActor.VelocityTick)
+          counterPosition = 0
+          counterVelocity = 0
+          runningState // Transition to running state
+        case _ => Behaviors.same // Ignore other messages
       }
 
       def runningState: Behavior[Command] = Behaviors.receiveMessage {
         case PauseSimulation =>
-          stopTick()
-          pauseState
-
+          timers.cancel("tick")
+          pauseState // Transition to pause state
         case TerminateSimulation =>
-          pendingTermination = true
+          timers.cancelAll()
+          goToTerminatedState = true
           Behaviors.same
-
-        case Tick =>
-          // Trigger velocity updates for all boids
-          boids.foreach(_ ! BoidActor.VelocityTick)
-          Behaviors.same
-
-        case BoidVelocityUpdated(_) =>
+        case BoidVelocityUpdated(boidRef) =>
           counterVelocity += 1
           if counterVelocity == boids.size then
-            // All velocities updated, start position updates
             boids.foreach(_ ! BoidActor.PositionTick)
             counterVelocity = 0
           Behaviors.same
-
-        case BoidPositionUpdated(_) =>
+        case BoidPositionUpdated(boidRef) =>
           counterPosition += 1
-          if counterPosition == boids.size then
-            // All positions updated
-            if pendingTermination then
-              stopTick()
-              boids.foreach(_ ! BoidActor.Terminate)
-              viewActorRef ! ViewActor.SimulationStopped
-              terminatedState
-            else
-              // Complete the frame
-
-              // Calculate and update FPS
-              val currentTime = System.currentTimeMillis()
-              val elapsedTime = currentTime - lastFrameTime
-              val fps = if elapsedTime > 0 then (1000.0 / elapsedTime).toInt else 0
-              lastFrameTime = currentTime
-              viewActorRef ! ViewActor.ViewTick(fps)
-              // Reset counters for next frame
-              resetCounters()
-
-              // Reset counter for next frame
-              counterPosition = 0
-              Behaviors.same
+          if counterPosition == boids.size && goToTerminatedState then
+            goToTerminatedState = false
+            boids.foreach(_ ! BoidActor.Terminate)
+            viewActorRef ! ViewActor.SimulationStopped
+            terminatedState
+          else if counterPosition == boids.size then
+            counterPosition = 0
+            Behaviors.same
           else Behaviors.same
-
+        case SimulationTick =>
+          if counterPosition == 0 then
+            boids.foreach(_ ! BoidActor.VelocityTick)
+          val elapsedTimeToFps = System.currentTimeMillis() - lastFrameTime
+          val fps = (1000.0 / elapsedTimeToFps).toInt
+          lastFrameTime = System.currentTimeMillis()
+          viewActorRef ! ViewActor.ViewTick(fps)
+          Behaviors.same
         case _ => Behaviors.same
       }
 
       terminatedState
     }
   }
-
 @main
 def main(): Unit =
   val system = ActorSystem(BoidsSimulation(), "BoidSystem")
   system ! BoidsSimulation.StartSimulation
-
+  // Exit on Ctrl-C
   sys.addShutdownHook {
     system.terminate()
   }

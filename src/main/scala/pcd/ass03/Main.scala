@@ -12,7 +12,7 @@ object BoidsSimulation:
 
   case object ResumeSimulation extends Command
 
-  case object SimulationTick extends Command
+  private case object SimulationTick extends Command
 
   case object PauseSimulation extends Command
 
@@ -37,9 +37,14 @@ object BoidsSimulation:
       var lastFrameTime = 0L
       var goToTerminatedState = false
       var boids: Seq[ActorRef[BoidActor.Command]] = Seq.empty
+      var tickCounter = 0L
+      var lastTickValue = 0L
 
-      def startTick =
+      def startTick(): Unit =
         timers.startTimerAtFixedRate("tick", SimulationTick, TickInterval)
+
+      def cancelTick(): Unit =
+        timers.cancel("tick")
 
       // Create the view
       def spawnView =
@@ -66,7 +71,7 @@ object BoidsSimulation:
 
       def pauseState: Behavior[Command] = Behaviors.receiveMessage {
         case ResumeSimulation =>
-          startTick
+          startTick()
           // Reset counters and last frame time
           counterPosition = 0
           counterVelocity = 0
@@ -82,7 +87,7 @@ object BoidsSimulation:
 
       def terminatedState: Behavior[Command] = Behaviors.receiveMessage {
         case StartSimulation =>
-          startTick
+          startTick()
           // Reset counters and last frame time
           boids = (1 to NumBoids).map { i =>
             context.spawn(
@@ -100,15 +105,16 @@ object BoidsSimulation:
 
       def runningState: Behavior[Command] = Behaviors.receiveMessage {
         case PauseSimulation =>
-          timers.cancel("tick")
-          pauseState // Transition to pause state
+          cancelTick()
+          pauseState
         case TerminateSimulation =>
-          timers.cancelAll()
+          cancelTick()
           goToTerminatedState = true
           Behaviors.same
         case BoidVelocityUpdated(boidRef) =>
           counterVelocity += 1
           if counterVelocity == boids.size then
+            context.log.debug("All boids updated their velocity.")
             boids.foreach(_ ! BoidActor.PositionTick)
             counterVelocity = 0
           Behaviors.same
@@ -118,18 +124,24 @@ object BoidsSimulation:
             goToTerminatedState = false
             boids.foreach(_ ! BoidActor.Terminate)
             viewActorRef ! ViewActor.SimulationStopped
+            counterPosition = 0
             terminatedState
           else if counterPosition == boids.size then
+            context.log.debug("All boids updated their position.")
+            tickCounter += 1
             counterPosition = 0
             Behaviors.same
           else Behaviors.same
         case SimulationTick =>
-          if counterPosition == 0 then
+          if counterPosition == 0 && tickCounter > lastTickValue then
+            context.log.debug("Simulation tick received, and all boids have updated their position")
             boids.foreach(_ ! BoidActor.VelocityTick)
-          val elapsedTimeToFps = System.currentTimeMillis() - lastFrameTime
-          val fps = (1000.0 / elapsedTimeToFps).toInt
-          lastFrameTime = System.currentTimeMillis()
-          viewActorRef ! ViewActor.ViewTick(fps)
+            lastTickValue = tickCounter
+            val elapsedTimeToFps = System.currentTimeMillis() - lastFrameTime
+            val fps = (1000.0 / elapsedTimeToFps).toInt
+            lastFrameTime = System.currentTimeMillis()
+            viewActorRef ! ViewActor.ViewTick(fps)
+          else context.log.debug("Simulation tick received, missing boid position updates")
           Behaviors.same
         case _ => Behaviors.same
       }

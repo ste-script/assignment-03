@@ -14,9 +14,9 @@ object BoidActor:
     val PerceptionRadius = 50.0
     val AvoidRadius = 20.0
     val MaxSpeed = 4.0
-    val SeparationWeight = 1.0
-    val CohesionWeight = 1.0
-    val AlignmentWeight = 1.0
+    def SeparationWeight = 1.0
+    def CohesionWeight = 1.0
+    def AlignmentWeight = 1.0
 
     val MinX: Int = -Width / 2
     val MaxX: Int = Width / 2

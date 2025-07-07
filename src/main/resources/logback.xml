@@ -6,8 +6,8 @@
         </encoder>
     </appender>
 
-    <logger name="pcd.ass03" level="INFO"/>
-    <logger name="akka" level="INFO"/>
+    <logger name="pcd.ass03" level="DEBUG"/>
+    <logger name="akka" level="DEBUG"/>
 
     <root level="INFO">
         <appender-ref ref="STDOUT" />

@@ -23,7 +23,7 @@ object BoidsSimulation:
   private object Config:
     val simWidth: Int = 800
     val simHeight: Int = 800
-    val startNumBoids: Int = 2000
+    val startNumBoids: Int = 1500
     val tickInterval: FiniteDuration = 40.millis
     private val availableCores: Int = Runtime.getRuntime.availableProcessors()
     val spacePartitionerPoolSize: Int = availableCores / 4
@@ -85,11 +85,22 @@ object BoidsSimulation:
           viewActor: ActorRef[ViewActor.Command],
           spacePartitioner: ActorRef[SpacePartitionerActor.Command],
           targetNumBoids: Int,
-          currentBoids: Seq[ActorRef[BoidActor.Command]] = Seq.empty
+          currentBoids: Seq[ActorRef[BoidActor.Command]]
       ): Seq[ActorRef[BoidActor.Command]] =
         if currentBoids.size >= targetNumBoids then
           context.log.info(s"Current boids count: ${currentBoids.size}, target: $targetNumBoids")
-          currentBoids
+          val excessBoids = currentBoids.size - targetNumBoids
+          if excessBoids > 0 then
+            context.log.info(s"Removing excess boids: $excessBoids")
+            val boidToStop = currentBoids.takeRight(excessBoids);
+            boidToStop.foreach { boid =>
+              context.log.info(s"Stopping boid: $boid")
+              boid ! BoidActor.Terminate
+            }
+            currentBoids.dropRight(excessBoids)
+          else
+            context.log.info("No excess boids, returning current boids.")
+            currentBoids
         else
           context.log.info(s"Creating new boids: ${targetNumBoids - currentBoids.size} more needed.")
           val newBoids = (1 to targetNumBoids - currentBoids.size).map { i =>
@@ -130,14 +141,12 @@ object BoidsSimulation:
             val newBoids =
               boidActorMaker(viewActorRef, spacePartitionerBroadcast, state.targetNumberOfBoids, state.boids)
             val newState = state.setBoids(newBoids).resetCounters
-
             viewActorRef ! ViewActor.SimulationStarted
             newBoids.foreach(_ ! BoidActor.VelocityTick)
             runningBehavior(newState)
           case UpdateNumberOfBoids(newBoidsCount) =>
             val updatedState = state.updateNumberOfBoids(newBoidsCount)
             terminatedBehavior(updatedState)
-
           case _ => Behaviors.same
         }
 
@@ -148,12 +157,9 @@ object BoidsSimulation:
             pausedBehavior(state)
 
           case TerminateSimulation =>
-            cancelTick()
             runningBehavior(state.setTerminationFlag(true))
 
-          case UpdateNumberOfBoids(newBoidsCount) =>
-            val updatedState = state.updateNumberOfBoids(newBoidsCount)
-            runningBehavior(updatedState)
+          case UpdateNumberOfBoids(newBoidsCount) => runningBehavior(state.updateNumberOfBoids(newBoidsCount))
 
           case BoidVelocityUpdated(_) =>
             val newState = state.incrementVelocityCounter
@@ -165,18 +171,19 @@ object BoidsSimulation:
 
           case BoidPositionUpdated(_) =>
             val newState = state.incrementPositionCounter
-
             if newState.counterPosition == state.boids.size && state.goToTerminatedState then
+              cancelTick()
               state.boids.foreach(_ ! BoidActor.Terminate)
               viewActorRef ! ViewActor.SimulationStopped
-              terminatedBehavior(SimulationState())
+              val emptyState = SimulationState().updateNumberOfBoids(state.targetNumberOfBoids)
+              terminatedBehavior(emptyState)
             else if newState.counterPosition == state.boids.size && state.targetNumberOfBoids != state.boids.size then
               context.log.info(
                 s"Updating number of boids ${state.boids.size} to ${state.targetNumberOfBoids}."
               )
               val newBoids =
                 boidActorMaker(viewActorRef, spacePartitionerBroadcast, state.targetNumberOfBoids, state.boids)
-              val updatedState = state.setBoids(newBoids).resetCounters
+              val updatedState = newState.setBoids(newBoids).resetCounters.resetPositionCounter
               runningBehavior(updatedState)
             else if newState.counterPosition == state.boids.size then
               context.log.debug("All boids updated their position.")

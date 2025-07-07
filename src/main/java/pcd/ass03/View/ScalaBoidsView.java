@@ -192,9 +192,9 @@ public class ScalaBoidsView implements ChangeListener {
             boidsProperty.setCohesionWeight(0.1 * cohesionSlider.getValue());
         } else if (e.getSource() == alignmentSlider) {
             boidsProperty.setAlignmentWeight(0.1 * alignmentSlider.getValue());
-        } else if (e.getSource() == boidSlider) {
-            boidsProperty.setNumberOfBoids(boidSlider.getValue());
-        }*/
+        } else*/ if (e.getSource() == boidSlider) {
+            actorRef.tell(new BoidsSimulation.UpdateNumberOfBoids(boidSlider.getValue()));
+        }
     }
 
     public int getWidth() {

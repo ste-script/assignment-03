@@ -3,7 +3,7 @@ package pcd.ass03
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
 import pcd.ass01.Model.P2d
-import pcd.ass01.View.ScalaBoidsView
+import pcd.ass03.View.ScalaBoidsView
 
 import scala.jdk.CollectionConverters.*
 

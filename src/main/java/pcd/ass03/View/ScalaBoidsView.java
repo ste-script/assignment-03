@@ -1,6 +1,7 @@
-package pcd.ass01.View;
+package pcd.ass03.View;
 
 import akka.actor.typed.ActorRef;
+import pcd.ass03.BoidsSimulation;
 import pcd.ass01.Model.P2d;
 
 import javax.swing.*;
@@ -10,8 +11,6 @@ import java.awt.*;
 import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
-
-import pcd.ass03.BoidsSimulation;
 
 public class ScalaBoidsView implements ChangeListener {
 

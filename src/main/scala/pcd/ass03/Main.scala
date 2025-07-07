@@ -2,7 +2,7 @@ package pcd.ass03
 
 import akka.actor.typed.scaladsl.{Behaviors, Routers}
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
-import pcd.ass01.View.ScalaBoidsView
+import pcd.ass03.View.ScalaBoidsView
 
 import scala.concurrent.duration.*
 

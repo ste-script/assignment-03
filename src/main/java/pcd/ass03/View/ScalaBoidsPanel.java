@@ -1,4 +1,4 @@
-package pcd.ass01.View;
+package pcd.ass03.View;
 
 import pcd.ass01.Model.P2d;
 import pcd.ass01.View.BoidPattern.ShapeDrawer;

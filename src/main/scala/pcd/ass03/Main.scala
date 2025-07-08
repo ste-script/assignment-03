@@ -10,8 +10,9 @@ object BoidsSimulation:
   // Message protocol
   sealed trait Command
 
-  case object ResumeSimulation extends Command
   private case object SimulationTick extends Command
+
+  case object ResumeSimulation extends Command
   case object PauseSimulation extends Command
   case object TerminateSimulation extends Command
   case class UpdateNumberOfBoids(numBoids: Int) extends Command
@@ -26,7 +27,7 @@ object BoidsSimulation:
     val startNumBoids: Int = 1500
     val tickInterval: FiniteDuration = 40.millis
     private val availableCores: Int = Runtime.getRuntime.availableProcessors()
-    val spacePartitionerPoolSize: Int = availableCores / 4
+    val spacePartitionerPoolSize: Int = 4
 
   // Simulation state
   private case class SimulationState(
@@ -115,97 +116,104 @@ object BoidsSimulation:
       val spacePartitionerBroadcast = createSpacePartitionerBroadcast()
 
       // Behavior implementations
-      def pausedBehavior(state: SimulationState): Behavior[Command] =
-        Behaviors.receiveMessage {
-          case ResumeSimulation =>
-            startTick()
-            val resetState = state.resetCounters
-            resetState.boids.foreach(_ ! BoidActor.VelocityTick)
-            runningBehavior(resetState)
 
-          case TerminateSimulation =>
-            state.boids.foreach(_ ! BoidActor.Terminate)
-            Behaviors.stopped
-
-          case UpdateNumberOfBoids(newBoidsCount) =>
-            val updatedState = state.updateNumberOfBoids(newBoidsCount)
-            pausedBehavior(updatedState)
-
-          case _ => Behaviors.same
+      def alwaysValidBehavior(
+          state: SimulationState
+      ): (SimulationState => Behavior[Command]) => PartialFunction[Command, Behavior[Command]] =
+        (nextBehavior: SimulationState => Behavior[Command]) => {
+          case UpdateNumberOfBoids(newBoidsCount) => nextBehavior(state.updateNumberOfBoids(newBoidsCount))
         }
+
+      def pausedBehavior(state: SimulationState): Behavior[Command] =
+        Behaviors.receiveMessage(
+          alwaysValidBehavior(state)(pausedBehavior).orElse {
+            case ResumeSimulation =>
+              startTick()
+              val resetState = state.resetCounters
+              resetState.boids.foreach(_ ! BoidActor.VelocityTick)
+              runningBehavior(resetState)
+
+            case TerminateSimulation =>
+              state.boids.foreach(_ ! BoidActor.Terminate)
+              Behaviors.stopped
+
+            case _ => Behaviors.same
+          }
+        )
 
       def terminatedBehavior(state: SimulationState): Behavior[Command] =
         Behaviors.receiveMessage {
-          case StartSimulation =>
-            startTick()
-            val newBoids =
-              boidActorMaker(viewActorRef, spacePartitionerBroadcast, state.targetNumberOfBoids, state.boids)
-            val newState = state.setBoids(newBoids).resetCounters
-            viewActorRef ! ViewActor.SimulationStarted
-            newBoids.foreach(_ ! BoidActor.VelocityTick)
-            runningBehavior(newState)
-          case UpdateNumberOfBoids(newBoidsCount) =>
-            val updatedState = state.updateNumberOfBoids(newBoidsCount)
-            terminatedBehavior(updatedState)
-          case _ => Behaviors.same
+          alwaysValidBehavior(state)(terminatedBehavior).orElse {
+            case StartSimulation =>
+              startTick()
+              val newBoids =
+                boidActorMaker(viewActorRef, spacePartitionerBroadcast, state.targetNumberOfBoids, state.boids)
+              val newState = state.setBoids(newBoids).resetCounters
+              viewActorRef ! ViewActor.SimulationStarted
+              newBoids.foreach(_ ! BoidActor.VelocityTick)
+              runningBehavior(newState)
+            case _ => Behaviors.same
+          }
         }
 
       def runningBehavior(state: SimulationState): Behavior[Command] =
         Behaviors.receiveMessage {
-          case PauseSimulation =>
-            cancelTick()
-            pausedBehavior(state)
-
-          case TerminateSimulation =>
-            runningBehavior(state.setTerminationFlag(true))
-
-          case UpdateNumberOfBoids(newBoidsCount) => runningBehavior(state.updateNumberOfBoids(newBoidsCount))
-
-          case BoidVelocityUpdated(_) =>
-            val newState = state.incrementVelocityCounter
-            if newState.counterVelocity == state.boids.size then
-              context.log.debug("All boids updated their velocity.")
-              state.boids.foreach(_ ! BoidActor.PositionTick)
-              runningBehavior(newState.resetVelocityCounter)
-            else runningBehavior(newState)
-
-          case BoidPositionUpdated(_) =>
-            val newState = state.incrementPositionCounter
-            if newState.counterPosition == state.boids.size && state.goToTerminatedState then
+          alwaysValidBehavior(state)(runningBehavior).orElse {
+            case PauseSimulation =>
               cancelTick()
-              state.boids.foreach(_ ! BoidActor.Terminate)
-              viewActorRef ! ViewActor.SimulationStopped
-              val emptyState = SimulationState().updateNumberOfBoids(state.targetNumberOfBoids)
-              terminatedBehavior(emptyState)
-            else if newState.counterPosition == state.boids.size && state.targetNumberOfBoids != state.boids.size then
-              context.log.info(
-                s"Updating number of boids ${state.boids.size} to ${state.targetNumberOfBoids}."
-              )
-              val newBoids =
-                boidActorMaker(viewActorRef, spacePartitionerBroadcast, state.targetNumberOfBoids, state.boids)
-              val updatedState = newState.setBoids(newBoids).resetCounters.resetPositionCounter
-              runningBehavior(updatedState)
-            else if newState.counterPosition == state.boids.size then
-              context.log.debug("All boids updated their position.")
-              runningBehavior(newState.incrementTickCounter.resetPositionCounter)
-            else runningBehavior(newState)
+              pausedBehavior(state)
 
-          case SimulationTick =>
-            if state.counterPosition == 0 && state.tickCounter > state.lastTickValue then
-              context.log.debug("Simulation tick received, and all boids have updated their position")
-              state.boids.foreach(_ ! BoidActor.VelocityTick)
+            case TerminateSimulation =>
+              runningBehavior(state.setTerminationFlag(true))
 
-              val elapsedTime = System.currentTimeMillis() - state.lastFrameTime
-              val fps = if elapsedTime > 0 then (1000.0 / elapsedTime).toInt else 0
-              val updatedState = state.copy(lastFrameTime = System.currentTimeMillis()).withUpdatedLastTickValue
+            case BoidVelocityUpdated(_) =>
+              val newState = state.incrementVelocityCounter
+              if newState.counterVelocity == state.boids.size then
+                context.log.debug("All boids updated their velocity.")
+                state.boids.foreach(_ ! BoidActor.PositionTick)
+                runningBehavior(newState.resetVelocityCounter)
+              else runningBehavior(newState)
 
-              viewActorRef ! ViewActor.ViewTick(fps)
-              runningBehavior(updatedState)
-            else
-              context.log.debug("Simulation tick received, missing boid position updates")
-              Behaviors.same
+            case BoidPositionUpdated(_) =>
+              val newState = state.incrementPositionCounter
+              def allBoidUpdatedPosition: Boolean =
+                newState.counterPosition == state.boids.size
+              def needToChangeBoidNumber: Boolean =
+                newState.targetNumberOfBoids != state.boids.size
 
-          case _ => Behaviors.same
+              if allBoidUpdatedPosition then
+                if state.goToTerminatedState then
+                  cancelTick()
+                  state.boids.foreach(_ ! BoidActor.Terminate)
+                  viewActorRef ! ViewActor.SimulationStopped
+                  terminatedBehavior(SimulationState().updateNumberOfBoids(state.targetNumberOfBoids))
+                else if needToChangeBoidNumber then
+                  context.log.info(s"Updating number of boids ${state.boids.size} to ${state.targetNumberOfBoids}.")
+                  val newBoids =
+                    boidActorMaker(viewActorRef, spacePartitionerBroadcast, state.targetNumberOfBoids, state.boids)
+                  runningBehavior(newState.setBoids(newBoids).incrementTickCounter.resetPositionCounter)
+                else
+                  context.log.debug("All boids updated their position.")
+                  runningBehavior(newState.incrementTickCounter.resetPositionCounter)
+              else runningBehavior(newState)
+
+            case SimulationTick =>
+              if state.counterPosition == 0 && state.tickCounter > state.lastTickValue then
+                context.log.debug("Simulation tick received, and all boids have updated their position")
+                state.boids.foreach(_ ! BoidActor.VelocityTick)
+
+                val elapsedTime = System.currentTimeMillis() - state.lastFrameTime
+                val fps = if elapsedTime > 0 then (1000.0 / elapsedTime).toInt else 0
+                val updatedState = state.copy(lastFrameTime = System.currentTimeMillis()).withUpdatedLastTickValue
+
+                viewActorRef ! ViewActor.ViewTick(fps)
+                runningBehavior(updatedState)
+              else
+                context.log.debug("Simulation tick received, missing boid position updates")
+                Behaviors.same
+
+            case _ => Behaviors.same
+          }
         }
 
       terminatedBehavior(SimulationState())

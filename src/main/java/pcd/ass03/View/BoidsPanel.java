@@ -7,13 +7,13 @@ import javax.swing.*;
 import java.awt.*;
 import java.util.List;
 
-public class ScalaBoidsPanel extends JPanel {
+public class BoidsPanel extends JPanel {
 
-    private final ScalaBoidsView view;
+    private final BoidsView view;
     private int framerate;
     private List<P2d> boids;
 
-    public ScalaBoidsPanel(ScalaBoidsView view, List<P2d> boids) {
+    public BoidsPanel(BoidsView view, List<P2d> boids) {
         this.view = view;
         this.boids = boids;
     }

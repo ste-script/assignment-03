@@ -12,10 +12,10 @@ import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
 
-public class ScalaBoidsView implements ChangeListener {
+public class BoidsView implements ChangeListener {
 
     private JFrame frame;
-    private final ScalaBoidsPanel boidsPanel;
+    private final BoidsPanel boidsPanel;
     private JSlider cohesionSlider, separationSlider, alignmentSlider, boidSlider;
     private JButton pauseResumeButton, simulationModeButton;
     private int width, height;
@@ -24,7 +24,7 @@ public class ScalaBoidsView implements ChangeListener {
     private Boolean isPaused = false;
     private Boolean isRunning = true;
 
-    public ScalaBoidsView(int width, int height) {
+    public BoidsView(int width, int height) {
         this.width = width;
         this.height = height;
         boids = new ArrayList<P2d>();
@@ -34,7 +34,7 @@ public class ScalaBoidsView implements ChangeListener {
 
         JPanel cp = new JPanel(new BorderLayout());
 
-        boidsPanel = new ScalaBoidsPanel(this, boids);
+        boidsPanel = new BoidsPanel(this, boids);
         cp.add(BorderLayout.CENTER, boidsPanel);
 
         cp.add(BorderLayout.SOUTH, createBottomPanel());

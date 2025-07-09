@@ -3,7 +3,7 @@ package pcd.ass03
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
 import pcd.ass01.Model.P2d
-import pcd.ass03.View.ScalaBoidsView
+import pcd.ass03.View.BoidsView
 
 import scala.jdk.CollectionConverters.*
 
@@ -20,7 +20,7 @@ object ViewActor:
 
   case object SimulationStopped extends Command
 
-  def apply(view: ScalaBoidsView): Behavior[Command] = Behaviors.setup: _ =>
+  def apply(view: BoidsView): Behavior[Command] = Behaviors.setup: _ =>
     var boidsPositions: Map[ActorRef[BoidActor.Command], P2d] = Map.empty
     var isSimulationRunning = false // Track simulation state
 

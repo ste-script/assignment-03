@@ -2,7 +2,7 @@ package pcd.ass03
 
 import akka.actor.typed.scaladsl.{Behaviors, Routers}
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
-import pcd.ass03.View.ScalaBoidsView
+import pcd.ass03.View.BoidsView
 
 import scala.concurrent.duration.*
 
@@ -80,8 +80,8 @@ object BoidsSimulation:
       def cancelTick(): Unit = timers.cancel("tick")
 
       // Actor creation helpers
-      def createView(): ScalaBoidsView =
-        val view = new ScalaBoidsView(simWidth, simHeight)
+      def createView(): BoidsView =
+        val view = new BoidsView(simWidth, simHeight)
         view.setActorRef(context.self)
         view
 

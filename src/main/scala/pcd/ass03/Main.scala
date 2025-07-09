@@ -12,11 +12,16 @@ object BoidsSimulation:
 
   private case object SimulationTick extends Command
 
+  case object StartSimulation extends Command
   case object ResumeSimulation extends Command
   case object PauseSimulation extends Command
   case object TerminateSimulation extends Command
+
   case class UpdateNumberOfBoids(numBoids: Int) extends Command
-  case object StartSimulation extends Command
+  case class UpdateCohesionWeight(weight: Double) extends Command
+  case class UpdateSeparationWeight(weight: Double) extends Command
+  case class UpdateAlignmentWeight(weight: Double) extends Command
+
   case class BoidVelocityUpdated(boidRef: ActorRef[BoidActor.Command]) extends Command
   case class BoidPositionUpdated(boidRef: ActorRef[BoidActor.Command]) extends Command
 
@@ -38,7 +43,10 @@ object BoidsSimulation:
       boids: Seq[ActorRef[BoidActor.Command]] = Seq.empty,
       tickCounter: Long = 0L,
       lastTickValue: Long = 0L,
-      targetNumberOfBoids: Int = Config.startNumBoids
+      targetNumberOfBoids: Int = Config.startNumBoids,
+      cohesionWeight: Double = 1.0,
+      separationWeight: Double = 1.0,
+      alignmentWeight: Double = 1.0
   ):
     def resetCounters: SimulationState = copy(
       counterPosition = 0,
@@ -56,6 +64,12 @@ object BoidsSimulation:
     def withUpdatedLastTickValue: SimulationState = copy(lastTickValue = tickCounter)
     def updateNumberOfBoids(newCount: Int): SimulationState =
       copy(targetNumberOfBoids = newCount)
+    def updateCohesionWeight(weight: Double): SimulationState =
+      copy(cohesionWeight = weight)
+    def updateSeparationWeight(weight: Double): SimulationState =
+      copy(separationWeight = weight)
+    def updateAlignmentWeight(weight: Double): SimulationState =
+      copy(alignmentWeight = weight)
 
   def apply(): Behavior[Command] = Behaviors.setup { context =>
     Behaviors.withTimers { timers =>
@@ -86,7 +100,10 @@ object BoidsSimulation:
           viewActor: ActorRef[ViewActor.Command],
           spacePartitioner: ActorRef[SpacePartitionerActor.Command],
           targetNumBoids: Int,
-          currentBoids: Seq[ActorRef[BoidActor.Command]]
+          currentBoids: Seq[ActorRef[BoidActor.Command]],
+          cohesionWeight: Double,
+          separationWeight: Double,
+          alignmentWeight: Double
       ): Seq[ActorRef[BoidActor.Command]] =
         if currentBoids.size >= targetNumBoids then
           context.log.info(s"Current boids count: ${currentBoids.size}, target: $targetNumBoids")
@@ -106,7 +123,7 @@ object BoidsSimulation:
           context.log.info(s"Creating new boids: ${targetNumBoids - currentBoids.size} more needed.")
           val newBoids = (1 to targetNumBoids - currentBoids.size).map { i =>
             context.spawnAnonymous(
-              BoidActor(viewActor, spacePartitioner, context.self)
+              BoidActor(viewActor, spacePartitioner, context.self, cohesionWeight, separationWeight, alignmentWeight)
             )
           }
           newBoids ++ currentBoids
@@ -120,8 +137,8 @@ object BoidsSimulation:
       def alwaysValidBehavior(
           state: SimulationState
       ): (SimulationState => Behavior[Command]) => PartialFunction[Command, Behavior[Command]] =
-        (nextBehavior: SimulationState => Behavior[Command]) => {
-          case UpdateNumberOfBoids(newBoidsCount) => nextBehavior(state.updateNumberOfBoids(newBoidsCount))
+        (nextBehavior: SimulationState => Behavior[Command]) => { case UpdateNumberOfBoids(newBoidsCount) =>
+          nextBehavior(state.updateNumberOfBoids(newBoidsCount))
         }
 
       def pausedBehavior(state: SimulationState): Behavior[Command] =
@@ -147,7 +164,15 @@ object BoidsSimulation:
             case StartSimulation =>
               startTick()
               val newBoids =
-                boidActorMaker(viewActorRef, spacePartitionerBroadcast, state.targetNumberOfBoids, state.boids)
+                boidActorMaker(
+                  viewActorRef,
+                  spacePartitionerBroadcast,
+                  state.targetNumberOfBoids,
+                  state.boids,
+                  state.cohesionWeight,
+                  state.separationWeight,
+                  state.alignmentWeight
+                )
               val newState = state.setBoids(newBoids).resetCounters
               viewActorRef ! ViewActor.SimulationStarted
               newBoids.foreach(_ ! BoidActor.VelocityTick)
@@ -190,13 +215,35 @@ object BoidsSimulation:
                 else if needToChangeBoidNumber then
                   context.log.info(s"Updating number of boids ${state.boids.size} to ${state.targetNumberOfBoids}.")
                   val newBoids =
-                    boidActorMaker(viewActorRef, spacePartitionerBroadcast, state.targetNumberOfBoids, state.boids)
+                    boidActorMaker(
+                      viewActorRef,
+                      spacePartitionerBroadcast,
+                      state.targetNumberOfBoids,
+                      state.boids,
+                      state.cohesionWeight,
+                      state.separationWeight,
+                      state.alignmentWeight
+                    )
                   runningBehavior(newState.setBoids(newBoids).incrementTickCounter.resetPositionCounter)
                 else
                   context.log.debug("All boids updated their position.")
                   runningBehavior(newState.incrementTickCounter.resetPositionCounter)
               else runningBehavior(newState)
 
+            case UpdateCohesionWeight(weight) =>
+              val updatedState = state.updateCohesionWeight(weight)
+              context.log.info(s"Updated cohesion weight to $weight")
+              state.boids.foreach(_ ! BoidActor.UpdateCohesionWeight(weight))
+              runningBehavior(updatedState)
+            case UpdateSeparationWeight(weight) =>
+              val updatedState = state.updateSeparationWeight(weight)
+              context.log.info(s"Updated separation weight to $weight")
+              state.boids.foreach(_ ! BoidActor.UpdateSeparationWeight(weight))
+              runningBehavior(updatedState)
+            case UpdateAlignmentWeight(weight) =>
+              val updatedState = state.updateAlignmentWeight(weight)
+              updatedState.boids.foreach(_ ! BoidActor.UpdateAlignmentWeight(weight))
+              runningBehavior(updatedState)
             case SimulationTick =>
               if state.counterPosition == 0 && state.tickCounter > state.lastTickValue then
                 context.log.debug("Simulation tick received, and all boids have updated their position")

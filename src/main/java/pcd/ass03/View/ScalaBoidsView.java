@@ -186,13 +186,13 @@ public class ScalaBoidsView implements ChangeListener {
 
     @Override
     public void stateChanged(ChangeEvent e) {
-        /*if (e.getSource() == separationSlider) {
-            boidsProperty.setSeparationWeight(0.1 * separationSlider.getValue());
+        if (e.getSource() == separationSlider) {
+            actorRef.tell(new BoidsSimulation.UpdateSeparationWeight(0.1 * separationSlider.getValue()));
         } else if (e.getSource() == cohesionSlider) {
-            boidsProperty.setCohesionWeight(0.1 * cohesionSlider.getValue());
+            actorRef.tell(new BoidsSimulation.UpdateCohesionWeight(0.1 * cohesionSlider.getValue()));
         } else if (e.getSource() == alignmentSlider) {
-            boidsProperty.setAlignmentWeight(0.1 * alignmentSlider.getValue());
-        } else*/ if (e.getSource() == boidSlider) {
+            actorRef.tell(new BoidsSimulation.UpdateAlignmentWeight(0.1 * alignmentSlider.getValue()));
+        } else if (e.getSource() == boidSlider) {
             actorRef.tell(new BoidsSimulation.UpdateNumberOfBoids(boidSlider.getValue()));
         }
     }

@@ -3,7 +3,7 @@ import akka.actor.typed.ActorRef
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.BeforeAndAfterAll
 import pcd.ass01.Model.P2d
-import pcd.ass03.{BoidActor, BoidsSimulation, SpacePartitionerActor, ViewActor}
+import pcd.ass03.{BoidActor, BoidsSimulationActor, SpacePartitionerActor, ViewActor}
 import pcd.ass03.View.BoidsView
 
 class IntegrationTestSuite extends AnyFunSuite with BeforeAndAfterAll:
@@ -26,7 +26,7 @@ class IntegrationTestSuite extends AnyFunSuite with BeforeAndAfterAll:
     // Create the main actors
     val spacePartitioner = testKit.spawn(SpacePartitionerActor())
     val viewActor = testKit.spawn(ViewActor(mockView))
-    val simulationProbe = testKit.createTestProbe[BoidsSimulation.Command]()
+    val simulationProbe = testKit.createTestProbe[BoidsSimulationActor.Command]()
 
     // Create a few boids
     val boid1 = testKit.spawn(BoidActor(viewActor, spacePartitioner, simulationProbe.ref, 1.0, 1.0, 1.0))
@@ -96,7 +96,7 @@ class IntegrationTestSuite extends AnyFunSuite with BeforeAndAfterAll:
     val mockView = new BoidsView(800, 600)
     val viewActor = testKit.spawn(ViewActor(mockView))
     val spacePartitioner = testKit.spawn(SpacePartitionerActor())
-    val simulationProbe = testKit.createTestProbe[BoidsSimulation.Command]()
+    val simulationProbe = testKit.createTestProbe[BoidsSimulationActor.Command]()
 
     val boid = testKit.spawn(BoidActor(viewActor, spacePartitioner, simulationProbe.ref, 1.0, 1.0, 1.0))
 

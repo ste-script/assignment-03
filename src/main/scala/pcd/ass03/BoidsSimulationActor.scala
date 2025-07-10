@@ -6,7 +6,7 @@ import pcd.ass03.View.BoidsView
 
 import scala.concurrent.duration.*
 
-object BoidsSimulation:
+object BoidsSimulationActor:
   // Message protocol
   sealed trait Command
 
@@ -269,8 +269,8 @@ object BoidsSimulation:
 
 @main
 def main(): Unit =
-  val system = ActorSystem(BoidsSimulation(), "BoidSystem")
-  system ! BoidsSimulation.StartSimulation
+  val system = ActorSystem(BoidsSimulationActor(), "BoidSystem")
+  system ! BoidsSimulationActor.StartSimulation
 
   // Graceful shutdown on Ctrl-C
   sys.addShutdownHook {

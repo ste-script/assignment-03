@@ -1,7 +1,7 @@
 package pcd.ass03.View;
 
 import akka.actor.typed.ActorRef;
-import pcd.ass03.BoidsSimulation;
+import pcd.ass03.BoidsSimulationActor;
 import pcd.ass01.Model.P2d;
 
 import javax.swing.*;
@@ -20,7 +20,7 @@ public class BoidsView implements ChangeListener {
     private JButton pauseResumeButton, simulationModeButton;
     private int width, height;
     private volatile List<P2d> boids;
-    private ActorRef<BoidsSimulation.Command> actorRef;
+    private ActorRef<BoidsSimulationActor.Command> actorRef;
     private Boolean isPaused = false;
     private Boolean isRunning = true;
 
@@ -43,7 +43,7 @@ public class BoidsView implements ChangeListener {
         frame.setVisible(true);
     }
 
-    public void setActorRef(ActorRef<BoidsSimulation.Command> actorRef) {
+    public void setActorRef(ActorRef<BoidsSimulationActor.Command> actorRef) {
         this.actorRef = actorRef;
     }
 
@@ -122,9 +122,9 @@ public class BoidsView implements ChangeListener {
 
     private void toggleSimulationState() {
         if (!isPaused) {
-            actorRef.tell(BoidsSimulation.PauseSimulation$.MODULE$);
+            actorRef.tell(BoidsSimulationActor.PauseSimulation$.MODULE$);
         } else {
-            actorRef.tell(BoidsSimulation.ResumeSimulation$.MODULE$);
+            actorRef.tell(BoidsSimulationActor.ResumeSimulation$.MODULE$);
         }
         isPaused = !isPaused;
         pauseResumeButton.setText(isPaused ? "Resume" : "Pause");
@@ -132,14 +132,14 @@ public class BoidsView implements ChangeListener {
 
     private void toggleStopSimulation() {
         if (isRunning) {
-            actorRef.tell(BoidsSimulation.TerminateSimulation$.MODULE$);
+            actorRef.tell(BoidsSimulationActor.TerminateSimulation$.MODULE$);
             boidsPanel.setBoids(List.of());
             boidsPanel.repaint();
         } else {
             if (isPaused) {
                 toggleSimulationState();
             }
-            actorRef.tell(BoidsSimulation.StartSimulation$.MODULE$);
+            actorRef.tell(BoidsSimulationActor.StartSimulation$.MODULE$);
         }
         isRunning = !isRunning;
         simulationModeButton.setText(isRunning ? "Stop" : "Start");
@@ -187,13 +187,13 @@ public class BoidsView implements ChangeListener {
     @Override
     public void stateChanged(ChangeEvent e) {
         if (e.getSource() == separationSlider) {
-            actorRef.tell(new BoidsSimulation.UpdateSeparationWeight(0.1 * separationSlider.getValue()));
+            actorRef.tell(new BoidsSimulationActor.UpdateSeparationWeight(0.1 * separationSlider.getValue()));
         } else if (e.getSource() == cohesionSlider) {
-            actorRef.tell(new BoidsSimulation.UpdateCohesionWeight(0.1 * cohesionSlider.getValue()));
+            actorRef.tell(new BoidsSimulationActor.UpdateCohesionWeight(0.1 * cohesionSlider.getValue()));
         } else if (e.getSource() == alignmentSlider) {
-            actorRef.tell(new BoidsSimulation.UpdateAlignmentWeight(0.1 * alignmentSlider.getValue()));
+            actorRef.tell(new BoidsSimulationActor.UpdateAlignmentWeight(0.1 * alignmentSlider.getValue()));
         } else if (e.getSource() == boidSlider) {
-            actorRef.tell(new BoidsSimulation.UpdateNumberOfBoids(boidSlider.getValue()));
+            actorRef.tell(new BoidsSimulationActor.UpdateNumberOfBoids(boidSlider.getValue()));
         }
     }
 

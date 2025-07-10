@@ -34,12 +34,12 @@ object BoidActor:
   final case class UpdateAlignmentWeight(alignmentWeight: Double) extends Command
 
   def apply(
-      viewActor: ActorRef[ViewActor.Command],
-      spacePartitioner: ActorRef[SpacePartitionerActor.Command],
-      boidSimulation: ActorRef[BoidsSimulation.Command],
-      cohesionWeight: Double,
-      separationWeight: Double,
-      alignmentWeight: Double
+             viewActor: ActorRef[ViewActor.Command],
+             spacePartitioner: ActorRef[SpacePartitionerActor.Command],
+             boidSimulation: ActorRef[BoidsSimulationActor.Command],
+             cohesionWeight: Double,
+             separationWeight: Double,
+             alignmentWeight: Double
   ): Behavior[Command] = Behaviors.setup { ctx =>
     import Config.*
     val random = new Random()
@@ -139,14 +139,14 @@ object BoidActor:
       case NeighborsResult(neighbors) =>
         _velocity = newVelocity(neighbors)
         spacePartitioner ! SpacePartitionerActor.UpdateBoidVelocity(ctx.self, _velocity)
-        boidSimulation ! BoidsSimulation.BoidVelocityUpdated(ctx.self)
+        boidSimulation ! BoidsSimulationActor.BoidVelocityUpdated(ctx.self)
         Behaviors.same
 
       case PositionTick =>
         _position = wrapPosition(_position.sum(_velocity))
         spacePartitioner ! SpacePartitionerActor.UpdateBoidPosition(ctx.self, _position)
         viewActor ! ViewActor.BoidPositionUpdate(ctx.self, _position)
-        boidSimulation ! BoidsSimulation.BoidPositionUpdated(ctx.self)
+        boidSimulation ! BoidsSimulationActor.BoidPositionUpdated(ctx.self)
         Behaviors.same
 
       case Terminate =>

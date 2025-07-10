@@ -3,11 +3,11 @@ import akka.actor.typed.ActorRef
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.BeforeAndAfterAll
 import pcd.ass01.Model.{P2d, V2d}
-import pcd.ass03.{BoidActor, SpacePartitionerActor, ViewActor, BoidsSimulation}
+import pcd.ass03.{BoidActor, SpacePartitionerActor, ViewActor, BoidsSimulationActor}
 import pcd.ass03.View.BoidsView
 import scala.compiletime.uninitialized
 
-class BoidTestSuite extends AnyFunSuite with BeforeAndAfterAll:
+class   BoidTestSuite extends AnyFunSuite with BeforeAndAfterAll:
   val testKit: ActorTestKit = ActorTestKit()
 
   override def afterAll(): Unit = testKit.shutdownTestKit()
@@ -15,7 +15,7 @@ class BoidTestSuite extends AnyFunSuite with BeforeAndAfterAll:
   test("BoidActor should initialize with random position and velocity") {
     val viewProbe = testKit.createTestProbe[ViewActor.Command]()
     val spaceProbe = testKit.createTestProbe[SpacePartitionerActor.Command]()
-    val simulationProbe = testKit.createTestProbe[BoidsSimulation.Command]()
+    val simulationProbe = testKit.createTestProbe[BoidsSimulationActor.Command]()
 
     val boidRef = testKit.spawn(BoidActor(viewProbe.ref, spaceProbe.ref, simulationProbe.ref, 1.0, 1.0, 1.0))
 
@@ -27,7 +27,7 @@ class BoidTestSuite extends AnyFunSuite with BeforeAndAfterAll:
   test("BoidActor should handle VelocityTick by requesting neighbors") {
     val viewProbe = testKit.createTestProbe[ViewActor.Command]()
     val spaceProbe = testKit.createTestProbe[SpacePartitionerActor.Command]()
-    val simulationProbe = testKit.createTestProbe[BoidsSimulation.Command]()
+    val simulationProbe = testKit.createTestProbe[BoidsSimulationActor.Command]()
 
     val boidRef = testKit.spawn(BoidActor(viewProbe.ref, spaceProbe.ref, simulationProbe.ref, 1.0, 1.0, 1.0))
 
@@ -44,7 +44,7 @@ class BoidTestSuite extends AnyFunSuite with BeforeAndAfterAll:
   test("BoidActor should update velocity based on neighbors") {
     val viewProbe = testKit.createTestProbe[ViewActor.Command]()
     val spaceProbe = testKit.createTestProbe[SpacePartitionerActor.Command]()
-    val simulationProbe = testKit.createTestProbe[BoidsSimulation.Command]()
+    val simulationProbe = testKit.createTestProbe[BoidsSimulationActor.Command]()
 
     val boidRef = testKit.spawn(BoidActor(viewProbe.ref, spaceProbe.ref, simulationProbe.ref, 1.0, 1.0, 1.0))
 
@@ -59,13 +59,13 @@ class BoidTestSuite extends AnyFunSuite with BeforeAndAfterAll:
     boidRef ! BoidActor.NeighborsResult(neighbors)
 
     spaceProbe.expectMessageType[SpacePartitionerActor.UpdateBoidVelocity]
-    simulationProbe.expectMessageType[BoidsSimulation.BoidVelocityUpdated]
+    simulationProbe.expectMessageType[BoidsSimulationActor.BoidVelocityUpdated]
   }
 
   test("BoidActor should update position and wrap around boundaries") {
     val viewProbe = testKit.createTestProbe[ViewActor.Command]()
     val spaceProbe = testKit.createTestProbe[SpacePartitionerActor.Command]()
-    val simulationProbe = testKit.createTestProbe[BoidsSimulation.Command]()
+    val simulationProbe = testKit.createTestProbe[BoidsSimulationActor.Command]()
 
     val boidRef = testKit.spawn(BoidActor(viewProbe.ref, spaceProbe.ref, simulationProbe.ref, 1.0, 1.0, 1.0))
 
@@ -76,13 +76,13 @@ class BoidTestSuite extends AnyFunSuite with BeforeAndAfterAll:
 
     spaceProbe.expectMessageType[SpacePartitionerActor.UpdateBoidPosition]
     viewProbe.expectMessageType[ViewActor.BoidPositionUpdate]
-    simulationProbe.expectMessageType[BoidsSimulation.BoidPositionUpdated]
+    simulationProbe.expectMessageType[BoidsSimulationActor.BoidPositionUpdated]
   }
 
   test("BoidActor should handle weight updates") {
     val viewProbe = testKit.createTestProbe[ViewActor.Command]()
     val spaceProbe = testKit.createTestProbe[SpacePartitionerActor.Command]()
-    val simulationProbe = testKit.createTestProbe[BoidsSimulation.Command]()
+    val simulationProbe = testKit.createTestProbe[BoidsSimulationActor.Command]()
 
     val boidRef = testKit.spawn(BoidActor(viewProbe.ref, spaceProbe.ref, simulationProbe.ref, 1.0, 1.0, 1.0))
 
@@ -100,7 +100,7 @@ class BoidTestSuite extends AnyFunSuite with BeforeAndAfterAll:
   test("BoidActor should terminate properly") {
     val viewProbe = testKit.createTestProbe[ViewActor.Command]()
     val spaceProbe = testKit.createTestProbe[SpacePartitionerActor.Command]()
-    val simulationProbe = testKit.createTestProbe[BoidsSimulation.Command]()
+    val simulationProbe = testKit.createTestProbe[BoidsSimulationActor.Command]()
 
     val boidRef = testKit.spawn(BoidActor(viewProbe.ref, spaceProbe.ref, simulationProbe.ref, 1.0, 1.0, 1.0))
 
@@ -241,7 +241,7 @@ class BoidTestSuite extends AnyFunSuite with BeforeAndAfterAll:
     // Test the separation behavior directly with ActorTestKit instead of BehaviorTestKit
     val viewProbe = testKit.createTestProbe[ViewActor.Command]()
     val spaceProbe = testKit.createTestProbe[SpacePartitionerActor.Command]()
-    val simulationProbe = testKit.createTestProbe[BoidsSimulation.Command]()
+    val simulationProbe = testKit.createTestProbe[BoidsSimulationActor.Command]()
 
     val boidRef = testKit.spawn(BoidActor(viewProbe.ref, spaceProbe.ref, simulationProbe.ref, 1.0, 2.0, 1.0))
 
@@ -258,13 +258,13 @@ class BoidTestSuite extends AnyFunSuite with BeforeAndAfterAll:
 
     // Verify messages were sent (separation should influence velocity)
     spaceProbe.expectMessageType[SpacePartitionerActor.UpdateBoidVelocity]
-    simulationProbe.expectMessageType[BoidsSimulation.BoidVelocityUpdated]
+    simulationProbe.expectMessageType[BoidsSimulationActor.BoidVelocityUpdated]
   }
 
   test("Boid boundary wrapping") {
     val viewProbe = testKit.createTestProbe[ViewActor.Command]()
     val spaceProbe = testKit.createTestProbe[SpacePartitionerActor.Command]()
-    val simulationProbe = testKit.createTestProbe[BoidsSimulation.Command]()
+    val simulationProbe = testKit.createTestProbe[BoidsSimulationActor.Command]()
 
     val boidRef = testKit.spawn(BoidActor(viewProbe.ref, spaceProbe.ref, simulationProbe.ref, 1.0, 1.0, 1.0))
 
@@ -276,14 +276,14 @@ class BoidTestSuite extends AnyFunSuite with BeforeAndAfterAll:
       boidRef ! BoidActor.PositionTick
       spaceProbe.expectMessageType[SpacePartitionerActor.UpdateBoidPosition]
       viewProbe.expectMessageType[ViewActor.BoidPositionUpdate]
-      simulationProbe.expectMessageType[BoidsSimulation.BoidPositionUpdated]
+      simulationProbe.expectMessageType[BoidsSimulationActor.BoidPositionUpdated]
     }
   }
 
   test("Empty neighbors should not cause velocity changes") {
     val viewProbe = testKit.createTestProbe[ViewActor.Command]()
     val spaceProbe = testKit.createTestProbe[SpacePartitionerActor.Command]()
-    val simulationProbe = testKit.createTestProbe[BoidsSimulation.Command]()
+    val simulationProbe = testKit.createTestProbe[BoidsSimulationActor.Command]()
 
     val boidRef = testKit.spawn(BoidActor(viewProbe.ref, spaceProbe.ref, simulationProbe.ref, 1.0, 1.0, 1.0))
 
@@ -295,5 +295,5 @@ class BoidTestSuite extends AnyFunSuite with BeforeAndAfterAll:
 
     // Should still update velocity (but it might not change much)
     spaceProbe.expectMessageType[SpacePartitionerActor.UpdateBoidVelocity]
-    simulationProbe.expectMessageType[BoidsSimulation.BoidVelocityUpdated]
+    simulationProbe.expectMessageType[BoidsSimulationActor.BoidVelocityUpdated]
   }
